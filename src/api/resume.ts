@@ -2,11 +2,14 @@ import type { GameState } from '../game/types.ts';
 import { readJson, writeJson } from '../store/storage.ts';
 import type { GameResult } from './types.ts';
 
-/** What survives the round trip to Google: games to claim, and the review screen to come back to. */
+/** What survives the round trip to Google (and later visits): games to claim, and the review screen to come back to. Claims live in localStorage, the review in sessionStorage. */
 
 const CLAIMS = 'mapped:claims:v1';
 const RESUME = 'mapped:resume:v1';
-const CLAIM_TTL_MS = 24 * 3_600_000;
+/** Signed-out games stay claimable this long; the server keeps them for as long (UNCLAIMED_KEEP_DAYS). */
+const CLAIM_TTL_MS = 90 * 86_400_000;
+/** Oldest claims go first past this many. */
+const MAX_STORED_CLAIMS = 500;
 const RESUME_TTL_MS = 30 * 60_000;
 
 export interface Claim {
@@ -49,7 +52,19 @@ export function readClaims(storage: Storage | null, now: number): Claim[] {
 }
 
 export function addClaim(storage: Storage | null, claim: { id: string; claim: string }, now: number): void {
-  writeJson(storage, CLAIMS, [...readClaims(storage, now).filter((c) => c.id !== claim.id), { ...claim, at: now }]);
+  writeJson(storage, CLAIMS, [...readClaims(storage, now).filter((c) => c.id !== claim.id), { ...claim, at: now }].slice(-MAX_STORED_CLAIMS));
+}
+
+/** One-time move of claims saved by older versions in sessionStorage into `to` (localStorage). Keeps them where they are if `to` is unavailable. */
+export function migrateClaims(from: Storage | null, to: Storage | null, now: number): void {
+  if (!from || !to) return;
+  const moving = readClaims(from, now);
+  if (moving.length > 0) {
+    const have = new Set(readClaims(to, now).map((c) => c.id));
+    const merged = [...readClaims(to, now), ...moving.filter((c) => !have.has(c.id))].sort((a, b) => a.at - b.at);
+    writeJson(to, CLAIMS, merged.slice(-MAX_STORED_CLAIMS));
+  }
+  clearClaims(from);
 }
 
 /** Drops the claims with these ids (the ones the server has taken), keeping the rest. */
