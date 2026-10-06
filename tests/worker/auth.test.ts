@@ -22,6 +22,9 @@ describe('pure helpers', () => {
     expect(safeReturn('/\\evil.com')).toBe('/');
     expect(safeReturn('https://evil.com')).toBe('/');
     expect(safeReturn(null)).toBe('/');
+    expect(safeReturn('/\t/evil.com')).toBe('/');
+    expect(safeReturn('/\n/evil.com')).toBe('/');
+    expect(safeReturn('/ /evil.com')).toBe('/%20/evil.com');
   });
 
   it('cleanName enforces the name rules', () => {
@@ -114,6 +117,31 @@ describe('Google sign-in', () => {
   it('fake mode is refused anywhere but localhost', async () => {
     const res = await call(testEnv(db), 'GET', '/api/auth/google?as=x@y.z', { base: 'https://mapped.lukeghanna.com' });
     expect(res.status).toBe(500);
+    const me = await call(testEnv(db), 'GET', '/api/me', { base: 'https://mapped.lukeghanna.com' });
+    expect(me.status).toBe(500);
+    const callback = await call(testEnv(db), 'GET', '/api/auth/google/callback?code=abc&state=xyz', { base: 'https://mapped.lukeghanna.com' });
+    expect(callback.status).toBe(500);
+  });
+
+  it('control characters in return parameter are rejected', async () => {
+    const env = testEnv(db);
+    const res = await call(env, 'GET', '/api/auth/google?return=%2F%09%2Fevil.com');
+    const state = new URL(res.headers.get('Location')!).searchParams.get('state');
+    const callback = await call(env, 'GET', `/api/auth/google/callback?code=${encodeURIComponent('fake:test@test.com')}&state=${state}`, {
+      cookie: cookiesFrom(res),
+    });
+    expect(callback.headers.get('Location')).toBe('/');
+  });
+
+  it('fetch errors in exchange are handled gracefully', async () => {
+    const env = testEnv(db, { AUTH_MODE: 'google' });
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('network error');
+    });
+    const start = await call(env, 'GET', '/api/auth/google?return=/me');
+    const state = new URL(start.headers.get('Location')!).searchParams.get('state');
+    const callback = await call(env, 'GET', `/api/auth/google/callback?code=abc&state=${state}`, { cookie: cookiesFrom(start) });
+    expect(callback.headers.get('Location')).toBe('/me?auth=failed');
   });
 });
 
@@ -158,5 +186,19 @@ describe('names, sign-out and deleting an account', () => {
     expect(res.headers.get('Set-Cookie')).toMatch(/Max-Age=31536000/);
     const row = await db.prepare('SELECT expires_at FROM sessions').first<{ expires_at: number }>();
     expect(row!.expires_at).toBeGreaterThan(Date.now() + 364 * 86_400_000);
+  });
+
+  it('signing in again invalidates the previous session', async () => {
+    const env = testEnv(db);
+    const first = await signIn(env, 'ana@example.com');
+    expect(await (await call(env, 'GET', '/api/me', { cookie: first })).json()).toEqual({ user: { name: null, email: 'ana@example.com' } });
+    const start = await call(env, 'GET', '/api/auth/google?return=/&as=ana@example.com');
+    const state = new URL(start.headers.get('Location')!).searchParams.get('state');
+    const callback = await call(env, 'GET', `/api/auth/google/callback?code=${encodeURIComponent('fake:ana@example.com')}&state=${state}`, {
+      cookie: cookiesFrom(start) + '; ' + first,
+    });
+    expect(await (await call(env, 'GET', '/api/me', { cookie: first })).json()).toEqual({ user: null });
+    const newSession = callback.headers.getSetCookie().find((c) => c.startsWith('__Host-mapped_session='))!.split(';')[0];
+    expect(await (await call(env, 'GET', '/api/me', { cookie: newSession })).json()).toEqual({ user: { name: null, email: 'ana@example.com' } });
   });
 });

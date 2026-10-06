@@ -2,7 +2,7 @@ import { cleanName, NAME_RULE } from '../src/api/names.ts';
 import type { User } from '../src/api/types.ts';
 import { fromBase64url, hmac, randomToken, sha256 } from './crypto.ts';
 import type { Env } from './env.ts';
-import { cookie, getCookie, HttpError, isLocalHost, json, readBody, redirect } from './http.ts';
+import { cookie, getCookie, HttpError, json, readBody, redirect } from './http.ts';
 
 export const SESSION_COOKIE = '__Host-mapped_session';
 const FLOW_COOKIE = '__Host-mapped_oauth';
@@ -52,9 +52,15 @@ export async function me(req: Request, env: Env): Promise<Response> {
   return json(body, { headers: { 'Set-Cookie': cookie(SESSION_COOKIE, token, SESSION_DAYS * 86_400) } });
 }
 
-/** Only same-site paths: "/x", never "//evil.com" or "/\evil.com". */
+/** Only same-site paths: "/x", never "//evil.com", open redirects or data URIs. Uses URL parsing to validate. */
 export function safeReturn(value: string | null): string {
-  return value && value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\') && value.length <= 200 ? value : '/';
+  if (!value || value.length > 200 || /[\x00-\x1f\x7f]/.test(value) || !value.startsWith('/')) return '/';
+  try {
+    const url = new URL(value, 'http://x');
+    return url.origin === 'http://x' ? url.pathname + url.search + url.hash : '/';
+  } catch {
+    return '/';
+  }
 }
 
 function withParam(path: string, key: string, value: string): string {
@@ -63,14 +69,8 @@ function withParam(path: string, key: string, value: string): string {
   return url.pathname + url.search + url.hash;
 }
 
-/** Fake mode exists for local end-to-end tests. Anywhere else it would let anyone sign in as anyone. */
-function checkMode(req: Request, env: Env): void {
-  if (env.AUTH_MODE === 'fake' && !isLocalHost(req)) throw new HttpError(500, 'misconfigured', 'Sign-in is misconfigured.');
-}
-
 /** GET /api/auth/google?return=/path */
 export async function googleStart(req: Request, env: Env): Promise<Response> {
-  checkMode(req, env);
   const url = new URL(req.url);
   const back = safeReturn(url.searchParams.get('return'));
   const state = randomToken(16);
@@ -117,26 +117,29 @@ export function checkIdToken(idToken: string, clientId: string, now: number): Id
 }
 
 async function exchange(env: Env, code: string, verifier: string, redirectUri: string): Promise<Identity | null> {
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-      code_verifier: verifier,
-    }),
-  });
-  if (!res.ok) return null;
-  const { id_token } = (await res.json()) as { id_token?: string };
-  return id_token ? checkIdToken(id_token, env.GOOGLE_CLIENT_ID, Date.now()) : null;
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+        code_verifier: verifier,
+      }),
+    });
+    if (!res.ok) return null;
+    const { id_token } = (await res.json()) as { id_token?: string };
+    return id_token ? checkIdToken(id_token, env.GOOGLE_CLIENT_ID, Date.now()) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** GET /api/auth/google/callback?code&state */
 export async function googleCallback(req: Request, env: Env): Promise<Response> {
-  checkMode(req, env);
   const url = new URL(req.url);
   const [state, verifier, ...rest] = (getCookie(req, FLOW_COOKIE) ?? '').split('.');
   let back = '/';
@@ -163,7 +166,8 @@ export async function googleCallback(req: Request, env: Env): Promise<Response> 
     .bind(randomToken(16), identity.sub, identity.email, now)
     .first<{ id: string }>();
   const token = randomToken(32);
-  await env.DB.batch([
+  const oldToken = getCookie(req, SESSION_COOKIE);
+  const statements = [
     env.DB.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)').bind(
       await sessionHash(env, token),
       user!.id,
@@ -171,7 +175,11 @@ export async function googleCallback(req: Request, env: Env): Promise<Response> 
       now + SESSION_DAYS * DAY_MS,
     ),
     env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now),
-  ]);
+  ];
+  if (oldToken) {
+    statements.push(env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sessionHash(env, oldToken)));
+  }
+  await env.DB.batch(statements);
   return redirect(back, [clear, cookie(SESSION_COOKIE, token, SESSION_DAYS * 86_400)]);
 }
 
@@ -190,8 +198,10 @@ export async function setName(req: Request, env: Env): Promise<Response> {
   if (!name) throw new HttpError(400, 'invalid', `${NAME_RULE}.`);
   if (user.name !== null) throw new HttpError(409, 'has_name', 'You already have a name.');
   try {
-    await env.DB.prepare('UPDATE users SET name = ?, name_key = ? WHERE id = ? AND name IS NULL').bind(name, name.toLowerCase(), user.id).run();
+    const result = await env.DB.prepare('UPDATE users SET name = ?, name_key = ? WHERE id = ? AND name IS NULL').bind(name, name.toLowerCase(), user.id).run();
+    if (result.meta.changes === 0) throw new HttpError(409, 'has_name', 'You already have a name.');
   } catch (e) {
+    if (e instanceof HttpError) throw e;
     if (String(e).includes('UNIQUE')) throw new HttpError(409, 'taken', 'That name is taken.');
     throw e;
   }
