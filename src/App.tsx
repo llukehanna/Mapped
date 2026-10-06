@@ -1,4 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { api, signInHref, type ApiError } from './api/client.ts';
+import { addClaim, clearClaims, readClaims, saveResume, sessionStore, takeResume, type Run, type SaveState } from './api/resume.ts';
+import { useSession } from './api/session.ts';
+import type { BestSummary } from './api/types.ts';
 import { COUNTRIES } from './data/countries.ts';
 import { GEO_META } from './data/geoMeta.ts';
 import { COUNTRY, nameOf } from './data/lookup.ts';
@@ -6,6 +10,8 @@ import { TERRITORIES } from './data/territories.ts';
 import { formatClock, formatCountdown } from './game/format.ts';
 import { FACTS } from './data/facts.ts';
 import { clueText, HINT_LEVELS } from './game/hints.ts';
+import type { LogEntry } from './game/log.ts';
+import { boardFor, parseBoard, type Board } from './game/ranking.ts';
 import { groupOf, progressRows } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
@@ -29,6 +35,14 @@ import { MODES, SetupCard } from './ui/SetupCard.tsx';
 import { shapeStates } from './ui/shapeStates.ts';
 import { Toast, type ToastMessage } from './ui/Toast.tsx';
 import { HintCard } from './ui/HintCard.tsx';
+import { DeleteAccount } from './ui/DeleteAccount.tsx';
+import { Leaderboard } from './ui/Leaderboard.tsx';
+import { NameCard } from './ui/NameCard.tsx';
+import { routePath, useRoute } from './ui/router.ts';
+import { SaveCard } from './ui/SaveCard.tsx';
+import { SignInCard } from './ui/SignInCard.tsx';
+import { UserMenu } from './ui/UserMenu.tsx';
+import { YourGames } from './ui/YourGames.tsx';
 import { GiveUpButton, Score, ThemeToggle, TopBar, Wordmark } from './ui/TopBar.tsx';
 import { useGuess } from './ui/useGuess.ts';
 import { ZoomControls } from './ui/ZoomControls.tsx';
@@ -40,6 +54,7 @@ const OWNERS = new Map(TERRITORIES.flatMap((t) => (t.sovereign && t.geo ? [[t.id
 const clue = (mode: GameConfig['mode'], level: number, id: string) =>
   clueText(mode, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
 const storage = safeStorage();
+const session = sessionStore();
 /** `?seed=42` makes target order reproducible (used by end-to-end tests). */
 const SEED = Number(new URLSearchParams(window.location.search).get('seed')) || null;
 const random = SEED ? seededRandom(SEED) : Math.random;
@@ -87,6 +102,17 @@ export function App() {
   /** The "Give up?" dialog is open. `resume`: it paused a running game, so cancelling resumes it. */
   const [confirming, setConfirming] = useState<{ resume: boolean } | null>(null);
   const toastSeq = useRef(0);
+  const { user, setUser, signOut } = useSession();
+  const [route, go] = useRoute();
+  /** The server's record of the current game; null when it started offline. */
+  const [run, setRun] = useState<Run | null>(null);
+  const [save, setSave] = useState<SaveState | null>(null);
+  /** Signed in: your best on each board, for the setup card. */
+  const [bests, setBests] = useState<Map<Board, BestSummary>>(new Map());
+  const [card, setCard] = useState<'name' | 'delete' | null>(null);
+  const starting = useRef(false);
+  /** startedAt of the last game whose end was handled, so a restored review isn't saved twice. */
+  const finished = useRef<number | null>(null);
 
   const say = (text: string, tone: ToastMessage['tone']) => {
     toastSeq.current += 1;
@@ -101,6 +127,7 @@ export function App() {
   const limitMs = state.config.timeLimitSec === null ? null : state.config.timeLimitSec * 1000;
   const spent = elapsed(state, now);
   const left = limitMs === null ? Infinity : limitMs - spent;
+  const rankedRun = run?.board != null;
 
   // Theme: <html data-theme>, browser chrome color, and remember the choice.
   useEffect(() => {
@@ -125,14 +152,15 @@ export function App() {
     }
   }, [left, state.phase]);
 
-  // Leaving the tab pauses a stopwatch game. A countdown keeps running so looking answers up costs time.
+  // Leaving the tab pauses a stopwatch game. A countdown keeps running so looking answers up costs time,
+  // and so does a ranked run, since pausing would unrank it.
   useEffect(() => {
     const onVisibility = () => {
-      if (document.hidden && state.phase === 'playing' && limitMs === null) dispatch({ type: 'pause', now: Date.now() });
+      if (document.hidden && state.phase === 'playing' && limitMs === null && !rankedRun) dispatch({ type: 'pause', now: Date.now() });
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [state.phase, limitMs]);
+  }, [state.phase, limitMs, rankedRun]);
 
   // React to game events: glow, flashes, toasts, screen-reader announcements.
   useEffect(() => {
@@ -173,9 +201,11 @@ export function App() {
     return () => window.clearTimeout(id);
   }, [goal, mode, state.phase]);
 
-  // Entering review: save a best if earned.
+  // Entering review: save a local best if earned, and send the game to the server.
   useEffect(() => {
-    if (state.phase !== 'review') return;
+    if (state.phase !== 'review' || finished.current === state.startedAt) return;
+    finished.current = state.startedAt;
+    if (run) finish(run, state.log);
     setNewBest(
       recordResult(storage, state.config, {
         found: state.found.length,
@@ -188,9 +218,87 @@ export function App() {
     setAnnouncement(`Game over. ${state.found.length} of ${state.pool.length}.`);
   }, [state.phase]);
 
-  function start(config: GameConfig = draft) {
+  // Once we know who's signed in: come back from Google, claim games played signed out, load bests.
+  const loaded = useRef(false);
+  useEffect(() => {
+    if (user === undefined || loaded.current) return;
+    loaded.current = true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('auth') === 'failed') {
+      say("Sign-in didn't finish. Try again.", 'warn');
+      params.delete('auth');
+      const rest = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
+    }
+    const resume = takeResume(session, Date.now());
+    if (resume?.state.phase === 'review') {
+      finished.current = resume.state.startedAt;
+      dispatch({ type: 'restore', state: resume.state });
+      setRun(resume.run);
+      setSave(resume.save);
+    }
+    if (!user) return;
+    if (user.name === null) setCard('name');
+    const claims = readClaims(session, Date.now());
+    if (claims.length === 0) return void refreshBests();
+    api.claim(claims.map(({ id, claim }) => ({ id, claim }))).then(({ results }) => {
+      clearClaims(session);
+      const mine = results.find((r) => r.id === resume?.run?.id);
+      if (mine) setSave({ status: 'saved', result: mine });
+      refreshBests();
+    }, refreshBests);
+  }, [user]);
+
+  // Already signed in: /signin has nothing to show.
+  useEffect(() => {
+    if (user && route.name === 'signin') go({ name: 'home' }, { replace: true });
+  }, [user, route.name]);
+
+  /** Reloads your bests, and the rank on the save card (it changes once you pick a name). */
+  function refreshBests() {
+    api.myGames().then(({ bests: list }) => {
+      const map = new Map(list.map((b) => [b.board, b]));
+      setBests(map);
+      setSave((s) => {
+        const best = s?.status === 'saved' && s.result.ranked && s.result.board ? map.get(s.result.board) : undefined;
+        return best && s?.status === 'saved' ? { status: 'saved', result: { ...s.result, best } } : s;
+      });
+    }, () => undefined);
+  }
+
+  function finish(game: Run, log: LogEntry[]) {
+    setSave({ status: 'saving' });
+    api.finishGame(game.id, log).then(
+      (result) => {
+        setSave({ status: 'saved', result });
+        if (game.claim) addClaim(session, { id: game.id, claim: game.claim }, Date.now());
+        if (result.board && result.best) setBests((m) => new Map(m).set(result.board!, result.best!));
+      },
+      (e: ApiError) => setSave(e.code === 'unverified' ? { status: 'unverified' } : { status: 'error' }),
+    );
+  }
+
+  /** Off to Google. A finished game's review comes back with us. */
+  function beginSignIn() {
+    if (state.phase === 'review') saveResume(session, { state, run, save }, Date.now());
+    window.location.assign(signInHref(route.name === 'signin' ? '/' : routePath(route)));
+  }
+
+  const openBoard = (board: Board) => {
+    const { mode, region } = parseBoard(board)!;
+    go({ name: 'board', mode, region });
+  };
+
+  async function start(config: GameConfig = draft) {
+    if (starting.current) return;
+    starting.current = true;
+    // The server picks the target order and times the game. If it can't be reached quickly, play offline.
+    const online = await api.startGame(config).catch(() => null);
+    starting.current = false;
     const pool = poolFor(config.scope, COUNTRIES);
-    dispatch({ type: 'start', config, pool, order: shuffle(pool, random), now: Date.now() });
+    setRun(online && { id: online.id, claim: online.claim, board: online.board });
+    setSave(online ? null : { status: 'offline' });
+    dispatch({ type: 'start', config, pool, order: shuffle(pool, online ? seededRandom(online.seed) : random), now: Date.now() });
     setNewBest(false);
     warned.current = null;
     setMenuOpen(false);
@@ -236,14 +344,17 @@ export function App() {
   }
 
   // Keyboard: Esc pause, ? hint, S skip, + − 0 zoom, Enter start/replay, typing goes to the input.
-  const keys = useRef({ state, guess, start, hint, togglePause, confirming, cancelGiveUp });
+  const overlay = renderOverlay();
+  const keys = useRef({ state, guess, start, hint, togglePause, confirming, cancelGiveUp, blocked: false });
   useLayoutEffect(() => {
-    keys.current = { state, guess, start, hint, togglePause, confirming, cancelGiveUp };
+    keys.current = { state, guess, start, hint, togglePause, confirming, cancelGiveUp, blocked: overlay !== null };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const { state: s, guess: g, start: go, hint: h, togglePause: pause, confirming: asking, cancelGiveUp: cancel } = keys.current;
+      const { state: s, guess: g, start: go, hint: h, togglePause: pause, confirming: asking, cancelGiveUp: cancel, blocked } = keys.current;
+      // A card is open over the map: it handles its own keys.
+      if (blocked) return;
       const inField = e.target instanceof HTMLInputElement;
       const onButton = e.target instanceof HTMLButtonElement;
       if (e.key === 'Escape' && asking) return void cancel();
@@ -298,6 +409,46 @@ export function App() {
   const hinted = state.hint && state.phase === 'playing' && (mode === 'type' || state.hint.id === goal) ? state.hint : null;
   const clues = hinted ? Array.from({ length: hinted.level }, (_, i) => clue(mode, i + 1, hinted.id)) : [];
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
+  const draftBoard = boardFor(draft);
+
+  /** The card over the map, if any: from the URL (sign in, leaderboards, your games) or opened in place. */
+  function renderOverlay(): ReactNode {
+    if ((state.phase !== 'setup' && state.phase !== 'review') || user === undefined) return null;
+    const home = () => go({ name: 'home' });
+    if (card === 'name' && user) {
+      return (
+        <NameCard
+          onDone={(u) => {
+            setUser(u);
+            setCard(null);
+            refreshBests();
+          }}
+          onClose={() => setCard(null)}
+        />
+      );
+    }
+    if (card === 'delete' && user) {
+      return (
+        <DeleteAccount
+          user={user}
+          onDeleted={() => {
+            setUser(null);
+            setBests(new Map());
+            setCard(null);
+            home();
+            say('Account deleted', 'info');
+          }}
+          onClose={() => setCard(null)}
+        />
+      );
+    }
+    if (route.name === 'board') {
+      return <Leaderboard mode={route.mode} region={route.region} onPick={(mode, region) => go({ name: 'board', mode, region }, { replace: true })} onClose={home} />;
+    }
+    if (route.name === 'me' && user) return <YourGames user={user} onBoard={openBoard} onClose={home} />;
+    if ((route.name === 'me' || route.name === 'signin') && !user) return <SignInCard onSignIn={beginSignIn} onClose={home} />;
+    return null;
+  }
   const safe = safeArea(state.phase === 'paused' ? 'playing' : state.phase, small, size.width, size.height, keyboard);
 
   const clock = limitMs === null ? formatClock(spent) : formatCountdown(limitMs - spent);
@@ -340,9 +491,41 @@ export function App() {
         <>
           <div className="corner">
             <Wordmark />
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <div className="corner-actions">
+              <button type="button" className="btn" aria-label="Leaderboards" onClick={() => openBoard(draftBoard ?? 'type:world')}>
+                <Icon name="trophy" size={15} />
+                <span className="btn-label">Leaderboards</span>
+              </button>
+              {user ? (
+                <UserMenu
+                  user={user}
+                  onGames={() => go({ name: 'me' })}
+                  onBoards={() => openBoard(draftBoard ?? 'type:world')}
+                  onPickName={() => setCard('name')}
+                  onSignOut={() => {
+                    void signOut();
+                    setBests(new Map());
+                    say('Signed out', 'info');
+                  }}
+                  onDelete={() => setCard('delete')}
+                />
+              ) : (
+                user === null && (
+                  <button type="button" className="btn" onClick={() => go({ name: 'signin' })}>
+                    Sign in
+                  </button>
+                )
+              )}
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            </div>
           </div>
-          <SetupCard config={draft} best={readBest(storage, draft)} onChange={setDraft} onStart={() => start()} />
+          <SetupCard
+            config={draft}
+            best={readBest(storage, draft)}
+            serverBest={user && draftBoard ? (bests.get(draftBoard) ?? null) : null}
+            onChange={setDraft}
+            onStart={() => start()}
+          />
         </>
       )}
 
@@ -350,6 +533,7 @@ export function App() {
         <>
           <TopBar
             pill={pill}
+            ranked={rankedRun}
             found={state.found.length}
             total={state.pool.length}
             clock={clock}
@@ -394,6 +578,7 @@ export function App() {
           {state.phase === 'paused' && (
             <PauseOverlay
               confirming={confirming !== null}
+              ranked={rankedRun}
               onResume={togglePause}
               onAskGiveUp={askGiveUp}
               onCancel={cancelGiveUp}
@@ -450,6 +635,11 @@ export function App() {
               Play again <kbd>↵</kbd>
             </button>
           </header>
+          {save && (
+            <div className="save-dock">
+              <SaveCard save={save} signedIn={!!user} onSignIn={beginSignIn} onRetry={() => run && finish(run, state.log)} onBoard={openBoard} />
+            </div>
+          )}
           <ReviewPanel
             pool={state.pool}
             missed={state.missed}
@@ -471,6 +661,7 @@ export function App() {
         </>
       )}
 
+      {overlay}
       <div className="sr-only" aria-live="polite">
         {announcement}
       </div>
