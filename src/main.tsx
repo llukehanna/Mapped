@@ -3,6 +3,8 @@ import '@fontsource-variable/geist-mono';
 import './styles/tokens.css';
 import './styles/global.css';
 import './styles/map.css';
+import './styles/chrome.css';
+import './styles/screens.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
