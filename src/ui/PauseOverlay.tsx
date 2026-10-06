@@ -3,6 +3,8 @@ import { Icon } from './Icon.tsx';
 interface PauseOverlayProps {
   /** true: ask "Give up?"; false: the plain pause card */
   confirming: boolean;
+  /** this run can go on a leaderboard, and pausing will cost it that */
+  ranked: boolean;
   onResume: () => void;
   /** pause card: open the give-up question */
   onAskGiveUp: () => void;
@@ -13,7 +15,7 @@ interface PauseOverlayProps {
 }
 
 /** The one central card for pausing and for confirming a give-up. The map behind it is blurred and the clock stopped. */
-export function PauseOverlay({ confirming, onResume, onAskGiveUp, onCancel, onGiveUp }: PauseOverlayProps) {
+export function PauseOverlay({ confirming, ranked, onResume, onAskGiveUp, onCancel, onGiveUp }: PauseOverlayProps) {
   return (
     <div className="pause-overlay">
       {confirming ? (
@@ -33,6 +35,7 @@ export function PauseOverlay({ confirming, onResume, onAskGiveUp, onCancel, onGi
         <div className="pause-card glass" role="dialog" aria-modal="true" aria-label="Paused">
           <div className="pause-title">Paused</div>
           <p className="mute">The map is hidden while the clock is stopped.</p>
+          {ranked && <p className="gold">Pausing makes this run unranked.</p>}
           <div className="pause-actions">
             <button type="button" className="btn primary" onClick={onResume} autoFocus>
               <Icon name="play" /> Resume <kbd>Esc</kbd>

@@ -1,4 +1,5 @@
 import { Icon } from './Icon.tsx';
+import { RankedTag } from './RankedTag.tsx';
 
 export function Wordmark() {
   return (
@@ -39,6 +40,8 @@ export function GiveUpButton({ onGiveUp }: { onGiveUp: () => void }) {
 
 interface TopBarProps {
   pill: string;
+  /** this run can go on a leaderboard */
+  ranked: boolean;
   found: number;
   total: number;
   clock: string;
@@ -57,6 +60,11 @@ export function TopBar(p: TopBarProps) {
     <header className="topbar glass">
       <Wordmark />
       <span className="pill mono hide-sm">{p.pill}</span>
+      {p.ranked && (
+        <span className="hide-sm">
+          <RankedTag />
+        </span>
+      )}
       <div className="tb-spacer" />
       <Score found={p.found} total={p.total} />
       <div className="tb-divider" />

@@ -4,7 +4,11 @@ import type { Continent } from '../data/types.ts';
 import { formatClock } from '../game/format.ts';
 import { CONTINENTS, isWorld, poolFor, subregionsOf, WORLD } from '../game/scope.ts';
 import type { GameConfig, Mode, Scope } from '../game/types.ts';
+import type { BestSummary } from '../api/types.ts';
+import { boardFor, boardLabel } from '../game/ranking.ts';
 import type { Result } from '../store/bests.ts';
+import { hintsText } from './accountText.ts';
+import { RankedTag } from './RankedTag.tsx';
 
 export const MODES: { id: Mode; label: string; blurb: string }[] = [
   { id: 'type', label: 'Type', blurb: 'Name them all, any order' },
@@ -41,15 +45,18 @@ export function toggleSubregion(scope: Scope, name: string): Scope {
 interface SetupCardProps {
   config: GameConfig;
   best: Result | null;
+  /** signed in: your best on this setup's board, from the server */
+  serverBest: BestSummary | null;
   /** functional, so quick successive clicks never work from a stale config */
   onChange: (update: (config: GameConfig) => GameConfig) => void;
   onStart: () => void;
 }
 
-export function SetupCard({ config, best, onChange, onStart }: SetupCardProps) {
+export function SetupCard({ config, best, serverBest, onChange, onStart }: SetupCardProps) {
   const [showSubs, setShowSubs] = useState(config.scope.subregions.length > 0);
   const scope = config.scope;
   const total = countIn(scope);
+  const board = boardFor(config);
   const setScope = (update: (scope: Scope) => Scope) => onChange((c) => ({ ...c, scope: update(c.scope) }));
 
   return (
@@ -141,8 +148,20 @@ export function SetupCard({ config, best, onChange, onStart }: SetupCardProps) {
       </div>
 
       <div className="best">
-        <span>{total} countries</span>
-        {best ? (
+        <span>
+          {total} countries · {board ? <RankedTag text={`${boardLabel(board)} board`} /> : <span>Unranked: custom regions</span>}
+        </span>
+        {serverBest ? (
+          <span>
+            Best <b>{hintsText(serverBest.hints)}</b> · <b>{formatClock(serverBest.ms)}</b>
+            {serverBest.rank && (
+              <>
+                {' '}
+                · <b className="gold">#{serverBest.rank}</b>
+              </>
+            )}
+          </span>
+        ) : best ? (
           <span>
             Best <b>{best.found}/{best.total}</b> · <b>{formatClock(best.ms)}</b>
             {best.hints ? ` · ${best.hints} hint${best.hints === 1 ? '' : 's'}` : ''}
