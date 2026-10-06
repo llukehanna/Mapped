@@ -66,6 +66,15 @@ describe('starting a game', () => {
     await start();
     expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(old.id).first()).toBeNull();
   });
+
+  it('housekeeping keeps owned, finished games older than a day', async () => {
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    const old = await playGame(ana);
+    await db.prepare('UPDATE games SET started_at = ?').bind(Date.now() - 2 * 86_400_000).run();
+    await start();
+    expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(old.game.id).first()).not.toBeNull();
+    expect((await board()).rows.map((r) => r.name)).toEqual(['meridian']);
+  });
 });
 
 describe('finishing a game', () => {
@@ -102,6 +111,16 @@ describe('finishing a game', () => {
     expect((await res.json()).results).toEqual([]);
   });
 
+  it('a game already claimed can\'t be claimed again by another account', async () => {
+    const { game } = await playGame();
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    await call(env, 'POST', '/api/games/claim', { cookie: ana, body: { claims: [{ id: game.id, claim: game.claim }] } });
+    const bo = await signIn(env, 'bo@example.com', 'kestrel');
+    const second = await (await call(env, 'POST', '/api/games/claim', { cookie: bo, body: { claims: [{ id: game.id, claim: game.claim }] } })).json();
+    expect(second.results).toEqual([]);
+    expect((await board()).rows.map((r) => r.name)).toEqual(['meridian']);
+  });
+
   it('pausing saves the game unranked', async () => {
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     let paused = false;
@@ -125,6 +144,13 @@ describe('finishing a game', () => {
     const res = await call(env, 'POST', `/api/games/${game.id}/finish`, { body: { log: [{ t: 10, a: { type: 'found', id: 'FRA' } }] } });
     expect(res.status).toBe(422);
     expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(game.id).first()).toBeNull();
+  });
+
+  it('the 422 delete does not remove an already finished game', async () => {
+    const { game } = await playGame();
+    const res = await call(env, 'POST', `/api/games/${game.id}/finish`, { body: { log: [{ t: 10, a: { type: 'found', id: 'FRA' } }] } });
+    expect(res.status).toBe(409);
+    expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(game.id).first()).not.toBeNull();
   });
 
   it('a game can only be finished once', async () => {
