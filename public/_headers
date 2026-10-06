@@ -1,4 +1,5 @@
-# Cloudflare Workers static assets: per-path response headers. Keep CSP in sync with src/headers.ts and vercel.json.
+# Cloudflare Workers static assets: per-path response headers. Keep CSP in sync with src/headers.ts.
+# API responses come from the Worker and set their own headers.
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
@@ -10,4 +11,14 @@
   Cache-Control: public, max-age=31536000, immutable
 
 /index.html
+  Cache-Control: no-cache
+
+# Client routes are served index.html by the single-page-application fallback.
+/signin
+  Cache-Control: no-cache
+
+/me
+  Cache-Control: no-cache
+
+/leaderboards/*
   Cache-Control: no-cache

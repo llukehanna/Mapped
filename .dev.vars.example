@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `npm run dev:full`. Fake mode signs you in without Google (localhost only).
+AUTH_MODE=fake
+AUTH_SECRET=local-dev-secret
+GOOGLE_CLIENT_SECRET=unused-in-fake-mode
