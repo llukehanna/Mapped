@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BoardResponse, GameResult, MyGamesResponse, StartResponse } from '../../src/api/types.ts';
 import type { GameConfig } from '../../src/game/types.ts';
 import type { D1Database, Env } from '../../worker/env.ts';
-import { STARTS_PER_HOUR } from '../../worker/games.ts';
+import { MAX_CLAIMS_PER_REQUEST, STARTS_PER_HOUR } from '../../worker/games.ts';
 import { call, signIn, startDb, statements, testEnv, wipe } from './harness.ts';
 import { play, typeAll, type Move } from './play.ts';
 
@@ -121,6 +121,19 @@ describe('finishing a game', () => {
     expect((await board()).rows.map((r) => r.name)).toEqual(['meridian']);
   });
 
+  it('processes at most 8 claims per request', async () => {
+    expect(MAX_CLAIMS_PER_REQUEST).toBe(8);
+    const games = [];
+    for (let i = 0; i < 9; i++) games.push((await playGame()).game);
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    const claims = games.map((g) => ({ id: g.id, claim: g.claim }));
+    const first = await (await call(env, 'POST', '/api/games/claim', { cookie: ana, body: { claims } })).json();
+    expect(first.results).toHaveLength(8);
+    // The ninth is still unclaimed and goes through in the next request.
+    const second = await (await call(env, 'POST', '/api/games/claim', { cookie: ana, body: { claims: claims.slice(8) } })).json();
+    expect(second.results).toHaveLength(1);
+  });
+
   it('pausing saves the game unranked', async () => {
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     let paused = false;
@@ -141,9 +154,12 @@ describe('finishing a game', () => {
 
   it('a log that does not replay is refused and the game discarded', async () => {
     const game = await start();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const res = await call(env, 'POST', `/api/games/${game.id}/finish`, { body: { log: [{ t: 10, a: { type: 'found', id: 'FRA' } }] } });
     expect(res.status).toBe(422);
     expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(game.id).first()).toBeNull();
+    expect(logged).toHaveBeenCalledWith('unverified log', game.id, 1);
+    logged.mockRestore();
   });
 
   it('the 422 delete does not remove an already finished game', async () => {
