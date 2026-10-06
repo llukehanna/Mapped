@@ -155,3 +155,15 @@ it('replays a whole-world game in well under the Worker CPU budget', () => {
   for (let i = 0; i < 50; i++) replay(config, SEED, log);
   expect((performance.now() - t0) / 50).toBeLessThan(5);
 });
+
+it('replays a 5,000-entry hint log in linear time', () => {
+  // Every hint changes the game, so nothing short-circuits: the loop runs all 5,000 steps.
+  const config = cfg({ scope: { continents: [], subregions: [] } });
+  const log: LogEntry[] = Array.from({ length: 5000 }, (_, i) => ({ t: i * 10, a: { type: 'hint', rand: (i % 100) / 100 } }));
+  replay(config, SEED, log); // warm up
+  const runs = 5;
+  const t0 = performance.now();
+  for (let i = 0; i < runs; i++) replay(config, SEED, log);
+  const avg = (performance.now() - t0) / runs;
+  expect(avg).toBeLessThan(8); // about 3 ms when linear; the quadratic version took about 12
+});
