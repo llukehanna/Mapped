@@ -16,7 +16,7 @@ Pick any mix of continents and subregions, and a time limit (or none, for a stop
 
 ## Leaderboards
 
-There are 21 boards: each mode for the World and for each continent. A run counts when it finds every country without pausing. Boards rank by fewest hints, then fastest time.
+There are 21 boards: each mode for the World and for each continent. A run counts when it finds every country without pausing. Boards rank by fewest hints, then fastest time. Signing in adds this browser's earlier games to your account, and the bests it saved before accounts existed too (those unranked).
 
 The server keeps the score honest:
 

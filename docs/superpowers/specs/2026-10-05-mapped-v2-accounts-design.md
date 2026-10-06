@@ -18,7 +18,7 @@ Players can sign in with Google. Signed-in players' games are saved, and complet
 | Anti-cheat | The server times each game, picks the target order, and replays the action log through the shared reducer. |
 | Stack | One Cloudflare Worker for `/api/*`, and D1 (SQLite). |
 | Display identity | A unique display name chosen once at first sign-in. Google names and emails are never shown publicly. |
-| Local bests | Kept exactly as in v1, and not migrated into accounts. |
+| Local bests | Kept as in v1. Revised: those saved before v2 are imported, unranked, on first sign-in. |
 | Layout | Sign-in, Leaderboards and Your games are centred cards over a dimmed map. The post-game save prompt is a card at bottom centre. |
 
 ## Non-goals
@@ -47,6 +47,9 @@ Players can sign in with Google. Signed-in players' games are saved, and complet
 - Sign-in hardening: return paths are normalized and must stay on this site; fake mode is refused for every route off localhost; signing in revokes the session the browser already had.
 - Games and claims are protected against double-finish and double-claim races.
 - A 401 on a signed-in call signs the browser out locally. The name card opens by itself once per browser session.
+- Games played signed out stay claimable for 90 days, not one day. The browser keeps their claim tokens in localStorage (at most 500, oldest dropped), and the server keeps unclaimed finished games for 90 days. Unfinished games are still deleted after a day. Signing in on the same browser claims them all.
+- Claims saved by the first version in sessionStorage are moved to localStorage on the next load.
+- Local bests are no longer left behind. The first time an account signs in on a browser, the bests saved there before accounts existed (before the v2 launch) are sent to POST /api/me/import, 25 at a time. They show in Your games as "Unranked: played before accounts". They are unverified, so they never go on a board or become a best. Repeats are ignored.
 
 ## Architecture
 
