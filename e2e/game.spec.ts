@@ -29,7 +29,7 @@ test('type mode: typo on Enter, territory note, give up lists the rest', async (
   await input.pressSequentially('falklands');
   await expect(page.getByRole('status').filter({ hasText: 'Falkland Islands: Territory of the United Kingdom' })).toBeVisible();
   await page.getByRole('button', { name: 'Give up' }).click();
-  await page.getByRole('button', { name: 'Sure?' }).click();
+  await page.getByRole('alertdialog', { name: 'Give up?' }).getByRole('button', { name: 'Give up' }).click();
   await expect(page.getByText('Missed · 11')).toBeVisible();
 });
 
@@ -75,17 +75,29 @@ test('countdown: time running out ends the game', async ({ page }) => {
   await expect(page.getByText('Missed · 12')).toBeVisible();
 });
 
-test('give up confirms with a second click on the same spot', async ({ page }) => {
+test('give up always asks in one central dialog that pauses the clock; Esc keeps playing', async ({ page }) => {
   await openSetup(page);
   await page.getByRole('button', { name: /^S\. America/ }).click();
   await start(page);
-  // Click near the left edge (the flag icon), where a person aims, not the center.
-  const box = (await page.getByRole('button', { name: 'Give up' }).boundingBox())!;
-  const spot = { x: box.x + 8, y: box.y + box.height / 2 };
-  await page.mouse.click(spot.x, spot.y);
-  await expect(page.getByRole('button', { name: 'Sure?' })).toBeVisible();
-  await page.mouse.click(spot.x, spot.y);
+  const dialog = page.getByRole('alertdialog', { name: 'Give up?' });
+  await page.getByRole('button', { name: 'Give up' }).click();
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('.app')).toHaveClass(/phase-paused/);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.app')).toHaveClass(/phase-playing/);
+  // From the pause card, Give up leads to the same dialog.
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog', { name: 'Paused' }).getByRole('button', { name: 'Give up' }).click();
+  await dialog.getByRole('button', { name: 'Give up' }).click();
   await expect(page.locator('.review-bar')).toBeVisible();
+});
+
+test('paused hides the map itself, not just behind a backdrop', async ({ page }) => {
+  await openSetup(page);
+  await start(page);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.map-wrap')).toHaveCSS('filter', /blur/);
 });
 
 test('pause hides the map and Esc resumes', async ({ page }) => {

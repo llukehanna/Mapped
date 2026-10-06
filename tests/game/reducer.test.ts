@@ -66,6 +66,14 @@ describe('timer', () => {
     expect(reduce(start(), { type: 'tick', now: 10_000_000 }).phase).toBe('playing');
   });
 
+  it('give up works while paused, keeping the paused clock time', () => {
+    let s = reduce(start(), { type: 'pause', now: 4000 });
+    s = reduce(s, { type: 'giveUp', now: 90_000 });
+    expect(s.phase).toBe('review');
+    expect(s.endReason).toBe('gaveUp');
+    expect(s.elapsedMs).toBe(3000);
+  });
+
   it('pause stops the clock and ignores guesses until resumed', () => {
     let s = reduce(start(), { type: 'pause', now: 4000 });
     expect(s.phase).toBe('paused');

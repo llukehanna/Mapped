@@ -101,6 +101,8 @@ export function reduce(state: GameState, action: GameAction): GameState {
   if (action.type === 'resume') {
     return state.phase === 'paused' ? { ...state, phase: 'playing', runningSince: action.now } : state;
   }
+  // Giving up is allowed from the pause card as well as during play.
+  if (action.type === 'giveUp') return state.phase === 'playing' || state.phase === 'paused' ? end(state, 'gaveUp', action.now) : state;
   if (state.phase !== 'playing') return state;
 
   switch (action.type) {
@@ -127,7 +129,5 @@ export function reduce(state: GameState, action: GameAction): GameState {
         ? { ...end(state, 'timeout', action.now), elapsedMs: limit * 1000 }
         : state;
     }
-    case 'giveUp':
-      return end(state, 'gaveUp', action.now);
   }
 }

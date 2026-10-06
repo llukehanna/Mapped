@@ -31,10 +31,8 @@
   opacity: 0.85; transition: background-color 160ms var(--ease), opacity 160ms var(--ease);
 }
 .tb-btn:hover, .btn:hover { opacity: 1; background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.tb-btn.danger { color: var(--danger); opacity: 1; }
-.swap { display: inline-grid; }
-.swap > span { grid-area: 1 / 1; text-align: center; }
-.swap > [aria-hidden='true'] { visibility: hidden; }
+.btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .btn { border: 1px solid var(--chrome-line); opacity: 1; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--ink)); }
@@ -88,7 +86,7 @@ kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--mute); bord
 .zoom button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .zoom button + button { border-top: 1px solid var(--chrome-line); }
 
-.pause-overlay { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--page) 55%, transparent); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); }
+.pause-overlay { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--page) 45%, transparent); }
 .pause-card { padding: 26px 28px; text-align: center; background: var(--panel-bg); }
 .pause-title { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
 .pause-actions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
