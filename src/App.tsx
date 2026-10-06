@@ -54,6 +54,8 @@ const OWNERS = new Map(TERRITORIES.flatMap((t) => (t.sovereign && t.geo ? [[t.id
 const clue = (mode: GameConfig['mode'], level: number, id: string) =>
   clueText(mode, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
 const storage = safeStorage();
+/** Wait before the one automatic retry of /finish after a network failure. */
+const FINISH_RETRY_MS = 800;
 const session = sessionStore();
 /** `?seed=42` makes target order reproducible (used by end-to-end tests). */
 const SEED = Number(new URLSearchParams(window.location.search).get('seed')) || null;
@@ -140,7 +142,7 @@ export function App() {
 
   // Countdown expiry.
   useEffect(() => {
-    if (state.phase === 'playing') dispatch({ type: 'tick', now });
+    if (state.phase === 'playing') dispatch({ type: 'tick', now: Date.now() });
   }, [now, state.phase]);
 
   // Screen readers hear the clock only at one minute and ten seconds left, once each.
@@ -271,16 +273,21 @@ export function App() {
 
   function finish(game: Run, log: LogEntry[]) {
     setSave({ status: 'saving' });
-    api.finishGame(game.id, log).then(
-      (result) => {
-        if (currentRun.current === game.id) setSave({ status: 'saved', result });
-        if (game.claim) addClaim(session, { id: game.id, claim: game.claim }, Date.now());
-        if (result.board && result.best) setBests((m) => new Map(m).set(result.board!, result.best!));
-      },
-      (e: ApiError) => {
-        if (currentRun.current === game.id) setSave(e.code === 'unverified' ? { status: 'unverified' } : { status: 'error' });
-      },
-    );
+    const attempt = (retry: boolean) => {
+      api.finishGame(game.id, log).then(
+        (result) => {
+          if (currentRun.current === game.id) setSave({ status: 'saved', result });
+          if (game.claim) addClaim(session, { id: game.id, claim: game.claim }, Date.now());
+          if (result.board && result.best) setBests((m) => new Map(m).set(result.board!, result.best!));
+        },
+        (e: ApiError) => {
+          // Offline or timed out: once more after a moment (finishing is idempotent) before showing the error.
+          if (e.status === 0 && retry) return void window.setTimeout(() => attempt(false), FINISH_RETRY_MS);
+          if (currentRun.current === game.id) setSave(e.code === 'unverified' ? { status: 'unverified' } : { status: 'error' });
+        },
+      );
+    };
+    attempt(true);
   }
 
   /** Off to Google. A finished game's review comes back with us. */
