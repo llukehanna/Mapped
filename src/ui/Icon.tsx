@@ -12,6 +12,8 @@ const PATHS = {
   close: 'M6 6l12 12M18 6 6 18',
   skip: 'M6 5.5v13l9-6.5zM18 5v14',
   back: 'M10 6 4 12l6 6M4 12h16',
+  down: 'M6 9l6 6 6-6',
+  trophy: 'M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M10 17h4v4h-4z',
 } as const;
 
 export type IconName = keyof typeof PATHS;
