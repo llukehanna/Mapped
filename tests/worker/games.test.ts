@@ -5,7 +5,7 @@ import type { GameConfig } from '../../src/game/types.ts';
 import type { D1Database, Env } from '../../worker/env.ts';
 import { MAX_CLAIMS_PER_REQUEST, STARTS_PER_HOUR, UNCLAIMED_KEEP_DAYS } from '../../worker/games.ts';
 import { call, signIn, startDb, statements, testEnv, wipe } from './harness.ts';
-import { play, typeAll, type Move } from './play.ts';
+import { clickTarget, play, typeAll, type Move } from './play.ts';
 
 let db: D1Database;
 let dispose: () => Promise<void>;
@@ -263,6 +263,27 @@ describe('leaderboards and your games', () => {
       ['south-america', true, null, true],
     ]);
     expect((await call(env, 'GET', '/api/me/games')).status).toBe(401);
+  });
+
+  it('your games: personal bests count unfinished runs, most found first, and prefer a ranked run', async () => {
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    const findThen = (n: number, move = typeAll): Move => (s, now) => (s.found.length < n ? move(s, now) : { type: 'giveUp', now });
+    await playGame(ana, { moves: findThen(3) });
+    await playGame(ana, { moves: findThen(5), step: 3000 });
+    await playGame(ana, { moves: findThen(2, clickTarget), config: { ...SOUTH_AMERICA, mode: 'locate' } });
+    const mine: MyGamesResponse = await (await call(env, 'GET', '/api/me/games', { cookie: ana })).json();
+    expect(mine.bests).toEqual([]);
+    expect(mine.personal).toEqual(
+      expect.arrayContaining([
+        { board: 'type:south-america', found: 5, total: 12, hints: 0, ms: 18_000, ranked: false },
+        { board: 'locate:south-america', found: 2, total: 12, hints: 0, ms: 6_000, ranked: false },
+      ]),
+    );
+    expect(mine.personal).toHaveLength(2);
+    // A complete, ranked run beats any unfinished one, and carries its leaderboard rank.
+    await playGame(ana);
+    const after: MyGamesResponse = await (await call(env, 'GET', '/api/me/games', { cookie: ana })).json();
+    expect(after.personal.find((p) => p.board === 'type:south-america')).toEqual({ board: 'type:south-america', found: 12, total: 12, hints: 0, ms: 24_000, ranked: true });
   });
 
   it('recompute-bests rebuilds bests after a game is deleted by hand', async () => {
