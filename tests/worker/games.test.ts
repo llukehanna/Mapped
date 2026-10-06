@@ -78,6 +78,16 @@ describe('starting a game', () => {
     expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(old.game.id).first()).toBeNull();
   });
 
+  it('housekeeping finds abandoned games by index, not by scanning every game', async () => {
+    const plan = await db
+      .prepare('EXPLAIN QUERY PLAN SELECT id FROM games WHERE (finished_at IS NULL AND started_at < ?) OR (user_id IS NULL AND finished_at < ?) LIMIT 50')
+      .bind(0, 0)
+      .all<{ detail: string }>();
+    const details = plan.results.map((r) => r.detail).join('\n');
+    expect(details).toContain('games_abandoned');
+    expect(details).not.toMatch(/SCAN (games|TABLE games)\b/);
+  });
+
   it('housekeeping keeps owned, finished games older than a day', async () => {
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     const old = await playGame(ana);
