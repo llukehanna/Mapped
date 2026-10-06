@@ -1,0 +1,40 @@
+.map-wrap { position: fixed; inset: 0; }
+.map { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.map:active { cursor: grabbing; }
+.map.locating { cursor: crosshair; }
+
+.sphere { fill: var(--ocean); stroke: var(--sphere-line); vector-effect: non-scaling-stroke; }
+.grat { fill: none; stroke: var(--grat); stroke-width: 0.5; vector-effect: non-scaling-stroke; }
+
+.shape { stroke: var(--border); stroke-width: 0.6; vector-effect: non-scaling-stroke; transition: fill 600ms var(--ease); }
+.shape.todo { fill: var(--land); }
+.shape.found { fill: var(--found); stroke: color-mix(in srgb, var(--found) 70%, #000); }
+.shape.just { fill: var(--just); filter: var(--just-glow); transition: none; }
+.shape.missed { fill: url(#missed-hatch); }
+.shape.off { fill: var(--off); pointer-events: none; }
+.shape.territory { fill: var(--territory); pointer-events: none; }
+.map.locating .shape.todo:hover, .map.locating .shape.found:hover { fill: var(--land-hover); }
+.map.reviewing .shape.missed:hover { stroke: var(--ink); stroke-width: 1.4; }
+
+.hatch-bg { fill: var(--missed); }
+.hatch-line { stroke: var(--missed-line); stroke-width: 1.2; }
+
+.hl { fill: none; vector-effect: non-scaling-stroke; pointer-events: none; }
+.hl.hint { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; animation: dash 1s linear infinite; }
+.hl.target { fill: var(--accent); stroke: var(--accent); stroke-width: 2; filter: var(--just-glow); animation: breathe 1.6s ease-in-out infinite; }
+.hl.wrong { fill: var(--danger); stroke: var(--danger); stroke-width: 1.5; animation: fade 1.2s var(--ease) forwards; }
+.hl.reveal { fill: var(--missed); stroke: var(--ink); stroke-width: 1.5; animation: fade 1.8s var(--ease) forwards; }
+.hl.hover { stroke: var(--ink); stroke-width: 1.6; }
+@keyframes dash { to { stroke-dashoffset: -14; } }
+@keyframes breathe { 50% { opacity: 0.55; } }
+@keyframes fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+
+.marker { fill: none; stroke: var(--marker); stroke-width: 1.2; pointer-events: none; transition: opacity 200ms; }
+.marker.found { fill: var(--found); stroke: var(--found); }
+.marker.just { fill: var(--just); stroke: var(--just); }
+.marker.missed { fill: var(--missed); stroke: var(--missed); }
+.marker.hl-target, .marker.hl-hint { stroke: var(--accent); stroke-width: 2.4; }
+.marker-hit { fill: transparent; pointer-events: all; }
+.marker-hit.inert { pointer-events: none; }
+.map-label { font: 600 12.5px var(--font-ui); fill: var(--ink); paint-order: stroke; stroke: var(--label-halo); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; animation: fade 1.8s var(--ease) forwards; }
+.area-pulse { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; pointer-events: none; animation: breathe 1.6s ease-in-out infinite; }
