@@ -155,3 +155,12 @@ test('a best saved before accounts shows up in Your games, unranked, after signi
   await expect(row).toContainText('40/45');
   await expect(row).toContainText('Unranked: played before accounts');
 });
+
+test('claims saved in sessionStorage by an older version move to localStorage on load, even signed out', async ({ page }) => {
+  await openSetup(page);
+  await page.evaluate(() => sessionStorage.setItem('mapped:claims:v1', JSON.stringify([{ id: 'old1', claim: 'tok', at: Date.now() }])));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'How well do you know the map?' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapped:claims:v1'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('mapped:claims:v1'))).toContain('old1');
+});
