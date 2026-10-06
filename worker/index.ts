@@ -1,6 +1,6 @@
 import { deleteMe, googleCallback, googleStart, me, nameAvailable, setName, signOut } from './auth.ts';
 import type { Env } from './env.ts';
-import { checkWrite, errorResponse, HttpError } from './http.ts';
+import { checkWrite, errorResponse, HttpError, isLocalHost } from './http.ts';
 
 type Handler = (req: Request, env: Env, params: string[]) => Promise<Response>;
 
@@ -18,6 +18,7 @@ const ROUTES: [method: string, path: RegExp, handler: Handler][] = [
 export async function handle(req: Request, env: Env): Promise<Response> {
   const path = new URL(req.url).pathname;
   try {
+    if (env.AUTH_MODE === 'fake' && !isLocalHost(req)) throw new HttpError(500, 'misconfigured', 'Sign-in is misconfigured.');
     const matching = ROUTES.filter(([, pattern]) => pattern.test(path));
     if (matching.length === 0) throw new HttpError(404, 'not_found', 'No such endpoint.');
     const route = matching.find(([method]) => method === req.method);
@@ -27,7 +28,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
   } catch (e) {
     if (e instanceof HttpError) return errorResponse(e);
     // Never log request bodies, cookies or tokens.
-    console.error('api error', req.method, path, e instanceof Error ? e.message : String(e));
+    console.error('api error', req.method, path, req.headers.get('cf-ray') ?? '-', e instanceof Error ? e.message : String(e));
     return errorResponse(new HttpError(500, 'server', 'Something went wrong.'));
   }
 }
