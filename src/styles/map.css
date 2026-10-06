@@ -3,16 +3,17 @@
 .map:active { cursor: grabbing; }
 .map.locating { cursor: crosshair; }
 
-.sphere { fill: var(--ocean); stroke: var(--sphere-line); vector-effect: non-scaling-stroke; }
+.ocean { fill: var(--ocean); }
 .grat { fill: none; stroke: var(--grat); stroke-width: 0.5; vector-effect: non-scaling-stroke; }
 
-.shape { stroke: var(--border); stroke-width: 0.6; vector-effect: non-scaling-stroke; transition: fill 600ms var(--ease); }
+/* Borders are a slightly lighter (dark theme) or darker (light theme) tone of each country's own fill. */
+.shape { stroke: var(--border); stroke-width: 0.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; transition: fill 600ms var(--ease), stroke 600ms var(--ease); }
 .shape.todo { fill: var(--land); }
-.shape.found { fill: var(--found); stroke: color-mix(in srgb, var(--found) 70%, #000); }
-.shape.just { fill: var(--just); filter: var(--just-glow); transition: none; }
+.shape.found { fill: var(--found); stroke: var(--border-found); }
+.shape.just { fill: var(--just); stroke: var(--just); filter: var(--just-glow); transition: none; }
 .shape.missed { fill: url(#missed-hatch); }
-.shape.off { fill: var(--off); pointer-events: none; }
-.shape.territory { fill: var(--territory); pointer-events: none; }
+.shape.off { fill: var(--off); stroke: var(--border-off); pointer-events: none; }
+.shape.territory { fill: var(--territory); stroke: var(--border-off); pointer-events: none; }
 .map.locating .shape.todo:hover, .map.locating .shape.found:hover { fill: var(--land-hover); }
 .map.reviewing .shape.missed:hover { stroke: var(--ink); stroke-width: 1.4; }
 

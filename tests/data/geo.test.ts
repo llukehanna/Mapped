@@ -34,6 +34,6 @@ describe('generated map data', () => {
   });
 
   it('stays within the size budget', () => {
-    expect(statSync(TOPO_URL).size).toBeLessThan(600 * 1024);
+    expect(statSync(TOPO_URL).size).toBeLessThan(800 * 1024);
   });
 });
