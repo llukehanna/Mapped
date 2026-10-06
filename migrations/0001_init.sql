@@ -16,6 +16,7 @@ CREATE TABLE sessions (
   expires_at INTEGER NOT NULL
 );
 CREATE INDEX sessions_user ON sessions (user_id);
+CREATE INDEX sessions_expiry ON sessions (expires_at);
 
 CREATE TABLE games (
   id TEXT PRIMARY KEY,
