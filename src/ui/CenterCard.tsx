@@ -15,9 +15,8 @@ export function CenterCard({ label, title, subtitle, wide = false, onClose, chil
   const close = useRef(onClose);
   close.current = onClose;
   const section = useRef<HTMLElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
+  const opener = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
   useEffect(() => {
-    previousFocus.current = document.activeElement as HTMLElement | null;
     if (section.current && !section.current.contains(document.activeElement)) {
       section.current.focus();
     }
@@ -29,8 +28,10 @@ export function CenterCard({ label, title, subtitle, wide = false, onClose, chil
   }, []);
   useEffect(() => {
     return () => {
-      if (previousFocus.current && document.contains(previousFocus.current)) {
-        previousFocus.current.focus();
+      const currentFocus = document.activeElement as HTMLElement | null;
+      const isBodyOrInsideCard = currentFocus === document.body || (section.current && section.current.contains(currentFocus));
+      if (opener.current && document.contains(opener.current) && isBodyOrInsideCard) {
+        opener.current.focus();
       }
     };
   }, []);
