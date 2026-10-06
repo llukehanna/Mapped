@@ -6,7 +6,7 @@ import type { GameConfig, Mode, Scope } from './types.ts';
 /** Anti-cheat thresholds, shared by the client (to explain) and the server (to judge). */
 export const MIN_FIND_GAP_MS = 100;
 export const MIN_MS_PER_COUNTRY = 300;
-export const CLOCK_TOLERANCE_MS = 2000;
+export const CLOCK_TOLERANCE_MS = 3000;
 
 export type Region = 'world' | Continent;
 export const BOARD_MODES: Mode[] = ['type', 'locate', 'identify'];

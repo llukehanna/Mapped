@@ -219,7 +219,7 @@ All bodies are JSON. Every non-GET request must carry `Content-Type: application
 
 **Claim** verifies the HMAC of each claim token, sets `user_id`, clears `claim_hash`, then re-runs step 4 onward without the anonymous rule.
 
-**Constants** (`src/game/ranking.ts`, shared by client and server): `MIN_FIND_GAP_MS = 100`, `MIN_MS_PER_COUNTRY = 300`, `CLOCK_TOLERANCE_MS = 2000`, `BOARD_REGIONS = ['world', 'africa', 'asia', 'europe', 'north-america', 'south-america', 'oceania']`, `boardFor(config)`, `compareRuns(a, b)`.
+**Constants** (`src/game/ranking.ts`, shared by client and server): `MIN_FIND_GAP_MS = 100`, `MIN_MS_PER_COUNTRY = 300`, `CLOCK_TOLERANCE_MS = 3000`, `BOARD_REGIONS = ['world', 'africa', 'asia', 'europe', 'north-america', 'south-america', 'oceania']`, `boardFor(config)`, `compareRuns(a, b)`.
 
 **Known gaps:**
 
