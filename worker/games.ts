@@ -35,9 +35,8 @@ interface GameRow {
 export async function startGame(req: Request, env: Env): Promise<Response> {
   const config = parseConfig((await readBody(req)).config);
   if (!config) throw new HttpError(400, 'bad_config', "That setup isn't valid.");
-  const now = Date.now();
   const ipHash = await hmac(env.AUTH_SECRET, `ip:${clientIp(req)}`);
-  const recent = await env.DB.prepare('SELECT count(*) AS n FROM games WHERE ip_hash = ? AND started_at > ?').bind(ipHash, now - HOUR_MS).first<{ n: number }>();
+  const recent = await env.DB.prepare('SELECT count(*) AS n FROM games WHERE ip_hash = ? AND started_at > ?').bind(ipHash, Date.now() - HOUR_MS).first<{ n: number }>();
   if (recent!.n >= STARTS_PER_HOUR) throw new HttpError(429, 'rate_limited', 'Too many games from here. Try again in a bit.');
 
   const user = await currentUser(req, env);
@@ -45,6 +44,9 @@ export async function startGame(req: Request, env: Env): Promise<Response> {
   const seed = randomSeed();
   const claim = user ? null : randomToken(24);
   const board = boardFor(config);
+  const claimHash = claim && (await hmac(env.AUTH_SECRET, `claim:${claim}`));
+  // The start time is taken last, right before the insert, so the lookups above never count against the player's clock.
+  const now = Date.now();
   await env.DB.batch([
     // Housekeeping: unclaimed or abandoned games older than a day.
     env.DB.prepare(
@@ -52,7 +54,7 @@ export async function startGame(req: Request, env: Env): Promise<Response> {
     ).bind(now - DAY_MS),
     env.DB.prepare(
       'INSERT INTO games (id, user_id, claim_hash, ip_hash, config, mode, scope_key, board, seed, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    ).bind(id, user?.id ?? null, claim && (await hmac(env.AUTH_SECRET, `claim:${claim}`)), ipHash, JSON.stringify(config), config.mode, scopeKey(config.scope), board, seed, now),
+    ).bind(id, user?.id ?? null, claimHash, ipHash, JSON.stringify(config), config.mode, scopeKey(config.scope), board, seed, now),
   ]);
   return json({ id, claim, seed, board } satisfies StartResponse);
 }

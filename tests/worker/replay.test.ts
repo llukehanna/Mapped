@@ -75,8 +75,8 @@ describe('honest games that do not rank', () => {
 describe('doctored logs', () => {
   it('a shortened clock: the replay is quicker than the server saw', () => {
     const log = play(cfg(), typeAll);
-    expect(verdict(cfg(), log, log.at(-1)!.t + 1900)).toMatchObject({ reason: null });
-    expect(verdict(cfg(), log, log.at(-1)!.t + 2100)).toMatchObject({ reason: 'unverified' });
+    expect(verdict(cfg(), log, log.at(-1)!.t + 2900)).toMatchObject({ reason: null });
+    expect(verdict(cfg(), log, log.at(-1)!.t + 3100)).toMatchObject({ reason: 'unverified' });
   });
 
   it('finds closer together than anyone can type', () => {
