@@ -143,6 +143,10 @@ test('a best saved before accounts shows up in Your games, unranked, after signi
   await signInFromSetup(page);
   await pickName(page, player.name);
   await imported;
+  // The browser remembers the import as a hash, not the email.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('mapped:imported:v1')))
+    .toMatch(/^\["[0-9a-f]{64}"\]$/);
   await page.locator('.namechip').click();
   await page.getByRole('menuitem', { name: 'Your games' }).click();
   const row = page.getByRole('dialog', { name: 'Your games' }).locator('.recent li');
