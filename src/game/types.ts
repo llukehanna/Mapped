@@ -1,4 +1,5 @@
 import type { Continent } from '../data/types.ts';
+import type { LogEntry } from './log.ts';
 
 export type Mode = 'type' | 'locate' | 'identify';
 
@@ -46,6 +47,10 @@ export interface GameState {
   endReason: EndReason | null;
   /** latest thing that happened, for toasts and map flashes; seq retriggers animations */
   event: (GameEvent & { seq: number }) | null;
+  /** clock time the game started; null before the first start */
+  startedAt: number | null;
+  /** every action that changed the game, for the server to replay */
+  log: LogEntry[];
 }
 
 export type GameAction =
@@ -53,9 +58,10 @@ export type GameAction =
   | { type: 'found'; id: string; now: number; corrected?: boolean }
   | { type: 'click'; id: string; now: number }
   | { type: 'skip'; now: number }
-  | { type: 'hint'; rand: number }
+  | { type: 'hint'; rand: number; now: number }
   | { type: 'pause'; now: number }
   | { type: 'resume'; now: number }
   | { type: 'tick'; now: number }
   | { type: 'giveUp'; now: number }
-  | { type: 'toSetup' };
+  | { type: 'toSetup' }
+  | { type: 'restore'; state: GameState };

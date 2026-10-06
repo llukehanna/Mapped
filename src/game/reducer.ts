@@ -1,4 +1,5 @@
 import { HINT_LEVELS } from './hints.ts';
+import { toLogged } from './log.ts';
 import type { EndReason, GameAction, GameConfig, GameEvent, GameState } from './types.ts';
 
 export const TRIES_PER_TARGET = 3;
@@ -18,6 +19,8 @@ export function initialState(config: GameConfig): GameState {
     runningSince: null,
     endReason: null,
     event: null,
+    startedAt: null,
+    log: [],
   };
 }
 
@@ -93,7 +96,16 @@ function giveHint(state: GameState, rand: number): GameState {
   return climb(left[Math.min(left.length - 1, Math.floor(rand * left.length))], 1);
 }
 
+/** Applies `action`, recording it in the log when it changed the game. */
 export function reduce(state: GameState, action: GameAction): GameState {
+  const next = step(state, action);
+  if (next === state || next.startedAt === null) return next;
+  const logged = toLogged(action);
+  return logged && 'now' in action ? { ...next, log: [...state.log, { t: action.now - next.startedAt, a: logged }] } : next;
+}
+
+function step(state: GameState, action: GameAction): GameState {
+  if (action.type === 'restore') return action.state;
   if (action.type === 'start') {
     return {
       ...initialState(action.config),
@@ -101,6 +113,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
       pool: action.pool,
       queue: action.config.mode === 'type' ? [] : action.order,
       runningSince: action.now,
+      startedAt: action.now,
     };
   }
   if (action.type === 'toSetup') return { ...initialState(state.config), event: null };
