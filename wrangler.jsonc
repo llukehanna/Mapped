@@ -12,9 +12,9 @@
     "run_worker_first": ["/api/*"]
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "mapped", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "mapped", "database_id": "880bfa8e-2cb6-4e29-b1de-131900909d15", "migrations_dir": "migrations" }
   ],
   // Secrets (wrangler secret put): AUTH_SECRET, GOOGLE_CLIENT_SECRET. Local dev reads .dev.vars.
-  "vars": { "AUTH_MODE": "google", "GOOGLE_CLIENT_ID": "REPLACE_WITH_GOOGLE_CLIENT_ID" },
+  "vars": { "AUTH_MODE": "google", "GOOGLE_CLIENT_ID": "67182291840-rq65e1o7c2219f964elogdshpplkganv.apps.googleusercontent.com" },
   "observability": { "enabled": true }
 }
