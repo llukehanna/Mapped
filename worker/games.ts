@@ -1,4 +1,4 @@
-import type { GameResult, StartResponse, UnrankedReason } from '../src/api/types.ts';
+import { MAX_CLAIMS_PER_REQUEST, type GameResult, type StartResponse, type UnrankedReason } from '../src/api/types.ts';
 import { boardFor, parseConfig, type Board } from '../src/game/ranking.ts';
 import { scopeKey } from '../src/game/scope.ts';
 import type { EndReason, GameConfig } from '../src/game/types.ts';
@@ -12,8 +12,8 @@ import { judge, parseLog } from './replay.ts';
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 export const STARTS_PER_HOUR = 200;
-/** Each claim costs 4-5 D1 queries and a Worker invocation may make 50 on the free plan. */
-export const MAX_CLAIMS_PER_REQUEST = 8;
+// Each claim costs 4-5 D1 queries and a Worker invocation may make 50 on the free plan.
+export { MAX_CLAIMS_PER_REQUEST };
 
 interface GameRow {
   id: string;

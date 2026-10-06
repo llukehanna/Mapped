@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, signInHref, type ApiError } from './api/client.ts';
-import { addClaim, clearClaims, readClaims, saveResume, sessionStore, takeResume, type Run, type SaveState } from './api/resume.ts';
+import { addClaim, readClaims, removeClaims, saveResume, sessionStore, takeResume, type Run, type SaveState } from './api/resume.ts';
 import { useSession } from './api/session.ts';
-import type { BestSummary } from './api/types.ts';
+import { MAX_CLAIMS_PER_REQUEST, type BestSummary } from './api/types.ts';
 import { COUNTRIES } from './data/countries.ts';
 import { GEO_META } from './data/geoMeta.ts';
 import { COUNTRY, nameOf } from './data/lookup.ts';
@@ -22,7 +22,7 @@ import { useShapes } from './map/useShapes.ts';
 import { WorldMap, type Highlight, type MapHandle } from './map/WorldMap.tsx';
 import { buildIndex } from './match/nameIndex.ts';
 import { readBest, recordResult } from './store/bests.ts';
-import { safeStorage } from './store/storage.ts';
+import { readJson, safeStorage, writeJson } from './store/storage.ts';
 import { readTheme, writeTheme, type Theme } from './store/theme.ts';
 import { GuessInput } from './ui/GuessInput.tsx';
 import { useKeyboardInset, useMediaQuery, useNow, useSize, useTransient } from './ui/hooks.ts';
@@ -57,6 +57,8 @@ const storage = safeStorage();
 /** Wait before the one automatic retry of /finish after a network failure. */
 const FINISH_RETRY_MS = 800;
 const session = sessionStore();
+/** The name card opens by itself once per browser session; the user menu can open it any time. */
+const NAME_ASKED = 'mapped:name-asked:v1';
 /** `?seed=42` makes target order reproducible (used by end-to-end tests). */
 const SEED = Number(new URLSearchParams(window.location.search).get('seed')) || null;
 const random = SEED ? seededRandom(SEED) : Math.random;
@@ -243,21 +245,36 @@ export function App() {
       setSave(resume.save);
     }
     if (!user) return;
-    if (user.name === null) setCard('name');
+    if (user.name === null && !readJson<boolean>(session, NAME_ASKED)) {
+      writeJson(session, NAME_ASKED, true);
+      setCard('name');
+    }
     const claims = readClaims(session, Date.now());
     if (claims.length === 0) return void refreshBests();
-    api.claim(claims.map(({ id, claim }) => ({ id, claim }))).then(({ results }) => {
-      clearClaims(session);
-      const mine = results.find((r) => r.id === resume?.run?.id);
-      if (mine && currentRun.current === mine.id) setSave({ status: 'saved', result: mine });
-      refreshBests();
-    }, refreshBests);
+    void claimAll(claims, resume?.run?.id);
   }, [user]);
 
   // Already signed in: /signin has nothing to show.
   useEffect(() => {
     if (user && route.name === 'signin') go({ name: 'home' }, { replace: true });
   }, [user, route.name]);
+
+  /** Sends claims to the server a few at a time, dropping from storage only those it took. */
+  async function claimAll(claims: { id: string; claim: string }[], resumedId: string | undefined) {
+    for (let i = 0; i < claims.length; i += MAX_CLAIMS_PER_REQUEST) {
+      const chunk = claims.slice(i, i + MAX_CLAIMS_PER_REQUEST).map(({ id, claim }) => ({ id, claim }));
+      try {
+        const { results } = await api.claim(chunk);
+        removeClaims(session, chunk.map((c) => c.id));
+        const mine = results.find((r) => r.id === resumedId);
+        if (mine && currentRun.current === mine.id) setSave({ status: 'saved', result: mine });
+      } catch (e) {
+        if ((e as ApiError).status === 401) return void setUser(null);
+        break;
+      }
+    }
+    refreshBests();
+  }
 
   /** Reloads your bests, and the rank on the save card (it changes once you pick a name). */
   function refreshBests() {
@@ -268,7 +285,12 @@ export function App() {
         const best = s?.status === 'saved' && s.result.ranked && s.result.board ? map.get(s.result.board) : undefined;
         return best && s?.status === 'saved' ? { status: 'saved', result: { ...s.result, best } } : s;
       });
-    }, () => undefined);
+    }, signedOutOn401);
+  }
+
+  /** A 401 from a signed-in call means the session is gone: show Sign in again. */
+  function signedOutOn401(e: ApiError) {
+    if (e.status === 401) setUser(null);
   }
 
   function finish(game: Run, log: LogEntry[]) {
@@ -459,7 +481,7 @@ export function App() {
     if (route.name === 'board') {
       return <Leaderboard mode={route.mode} region={route.region} onPick={(mode, region) => go({ name: 'board', mode, region }, { replace: true })} onClose={home} />;
     }
-    if (route.name === 'me' && user) return <YourGames user={user} onBoard={openBoard} onClose={home} />;
+    if (route.name === 'me' && user) return <YourGames user={user} onBoard={openBoard} onClose={home} onSignedOut={() => setUser(null)} />;
     if ((route.name === 'me' || route.name === 'signin') && !user) return <SignInCard onSignIn={beginSignIn} onClose={home} />;
     return null;
   }
