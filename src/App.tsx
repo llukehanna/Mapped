@@ -78,6 +78,8 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [newBest, setNewBest] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
+  /** The "Give up?" dialog is open. `resume`: it paused a running game, so cancelling resumes it. */
+  const [confirming, setConfirming] = useState<{ resume: boolean } | null>(null);
   const toastSeq = useRef(0);
 
   const say = (text: string, tone: ToastMessage['tone']) => {
@@ -182,13 +184,25 @@ export function App() {
     setMenuOpen(false);
     setArmed(null);
     setTip(null);
+    setConfirming(null);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
   const hint = () => dispatch({ type: 'hint', rand: random() });
   const togglePause = () =>
     dispatch(state.phase === 'paused' ? { type: 'resume', now: Date.now() } : { type: 'pause', now: Date.now() });
-  const giveUp = () => {
+  // Give up always goes through one central dialog, which pauses the clock while it's open.
+  const askGiveUp = () => {
     setMenuOpen(false);
+    if (state.phase === 'playing') dispatch({ type: 'pause', now: Date.now() });
+    setConfirming({ resume: state.phase === 'playing' });
+  };
+  const cancelGiveUp = () => {
+    if (confirming?.resume) dispatch({ type: 'resume', now: Date.now() });
+    setConfirming(null);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  };
+  const giveUp = () => {
+    setConfirming(null);
     dispatch({ type: 'giveUp', now: Date.now() });
   };
 
@@ -210,16 +224,17 @@ export function App() {
   }
 
   // Keyboard: Esc pause, ? hint, S skip, + − 0 zoom, Enter start/replay, typing goes to the input.
-  const keys = useRef({ state, guess, start, hint, togglePause });
+  const keys = useRef({ state, guess, start, hint, togglePause, confirming, cancelGiveUp });
   useLayoutEffect(() => {
-    keys.current = { state, guess, start, hint, togglePause };
+    keys.current = { state, guess, start, hint, togglePause, confirming, cancelGiveUp };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const { state: s, guess: g, start: go, hint: h, togglePause: pause } = keys.current;
+      const { state: s, guess: g, start: go, hint: h, togglePause: pause, confirming: asking, cancelGiveUp: cancel } = keys.current;
       const inField = e.target instanceof HTMLInputElement;
       const onButton = e.target instanceof HTMLButtonElement;
+      if (e.key === 'Escape' && asking) return void cancel();
       if (e.key === 'Escape' && (s.phase === 'playing' || s.phase === 'paused')) return void pause();
       // In setup, Enter always starts (Space still toggles a focused chip). In review it replays unless a button has focus.
       if (e.key === 'Enter' && s.phase === 'setup' && !inField) {
@@ -333,7 +348,7 @@ export function App() {
             paused={state.phase === 'paused'}
             onHint={hint}
             onPause={togglePause}
-            onGiveUp={giveUp}
+            onGiveUp={askGiveUp}
             onMenu={() => setMenuOpen(!menuOpen)}
           />
           <div className="dock">
@@ -364,7 +379,15 @@ export function App() {
           </div>
           {!small && <RegionProgress rows={rows} />}
           <ZoomControls onIn={() => mapRef.current?.zoomBy(1.6)} onOut={() => mapRef.current?.zoomBy(1 / 1.6)} onFit={() => mapRef.current?.fit()} />
-          {state.phase === 'paused' && <PauseOverlay onResume={togglePause} onGiveUp={giveUp} />}
+          {state.phase === 'paused' && (
+            <PauseOverlay
+              confirming={confirming !== null}
+              onResume={togglePause}
+              onAskGiveUp={askGiveUp}
+              onCancel={cancelGiveUp}
+              onGiveUp={giveUp}
+            />
+          )}
           {menuOpen && small && (
             <div className="sheet glass" role="dialog" aria-label="Menu">
               <div className="sheet-actions">
@@ -374,7 +397,7 @@ export function App() {
                 <button type="button" className="btn" onClick={() => (setMenuOpen(false), togglePause())}>
                   <Icon name="pause" /> Pause
                 </button>
-                <GiveUpButton onGiveUp={giveUp} />
+                <GiveUpButton onGiveUp={askGiveUp} />
               </div>
               <div className="bars">
                 {rows.map((r) => (

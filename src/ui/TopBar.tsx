@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Icon } from './Icon.tsx';
 
 export function Wordmark() {
@@ -19,22 +18,12 @@ export function Score({ found, total }: { found: number; total: number }) {
   );
 }
 
-/** "Give up" asks once more before ending the game. Both labels share one grid cell so the button never
- * changes width: otherwise it slides out from under the cursor and the confirming click misses. */
+/** Opens the central "Give up?" dialog; it never ends the game by itself. */
 export function GiveUpButton({ onGiveUp }: { onGiveUp: () => void }) {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const id = window.setTimeout(() => setArmed(false), 3000);
-    return () => window.clearTimeout(id);
-  }, [armed]);
   return (
-    <button type="button" className={`tb-btn ${armed ? 'danger' : ''}`} onClick={() => (armed ? onGiveUp() : setArmed(true))}>
+    <button type="button" className="tb-btn" onClick={onGiveUp}>
       <Icon name="flag" />
-      <span className="tb-label swap">
-        <span aria-hidden={armed}>Give up</span>
-        <span aria-hidden={!armed}>Sure?</span>
-      </span>
+      <span className="tb-label">Give up</span>
     </button>
   );
 }

@@ -1,4 +1,6 @@
-.map-wrap { position: fixed; inset: 0; }
+.map-wrap { position: fixed; inset: 0; transition: filter 300ms var(--ease), opacity 300ms var(--ease); }
+/* Paused: blur the map itself. A backdrop-filter on the overlay isn't applied in every browser. */
+.phase-paused .map-wrap { filter: blur(24px) saturate(70%); opacity: 0.6; }
 .map { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 .map:active { cursor: grabbing; }
 .map.locating { cursor: crosshair; }
