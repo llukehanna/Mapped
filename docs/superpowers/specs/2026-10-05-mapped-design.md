@@ -1,7 +1,7 @@
 # Mapped: design spec
 
 **Date:** 2026-10-05
-**Status:** Approved in brainstorming, awaiting spec review
+**Status:** Approved; revised after prototyping (see "Revisions after prototyping" at the end)
 **URL:** https://mapped.lukeghanna.com
 
 A map-based world geography quiz, inspired by [Sporcle's "Countries of the World"](https://www.sporcle.com/games/g/world), that fixes its main weaknesses: a small, hard-to-read map, strict and surprising name matching, no region selection, a fixed timer, and a long list of answers under the map that you have to scroll to.
@@ -31,7 +31,7 @@ Matches Solitaire.
 - **d3-geo**, **d3-zoom** and **topojson-client** for the map, rendered as React-owned SVG
 - **Geist / Geist Mono** via `@fontsource-variable`
 - **Vitest** for unit tests and **Playwright** for end-to-end tests
-- **mapshaper** (dev dependency) for the build-time geometry pipeline
+- **world-atlas**, **topojson-server** and **topojson-simplify** (dev dependencies) for the build-time geometry pipeline
 - Node 24+
 
 ## Hosting and free-plan compliance
@@ -81,7 +81,7 @@ interface Country {
 }
 ```
 
-**Continents:** Africa (54), Asia, Europe, North America (23), South America (12), Oceania. Final counts are set by the data and checked by tests.
+**Continents:** Africa (54), Asia (49), Europe (45), North America (23), South America (12), Oceania (14). The counts are checked by tests.
 
 Transcontinental assignments, fixed in data:
 - Russia → Europe
@@ -99,14 +99,15 @@ Territories such as Greenland, Western Sahara, Puerto Rico, French Guiana, New C
 
 ### Geometry pipeline
 
-`scripts/build-geo.ts` takes Natural Earth admin-0 at 1:50m (public domain) and runs it through mapshaper to produce `src/data/world.topo.json`. The steps:
+`scripts/build-geo.ts` takes Natural Earth admin-0 at 1:50m (public domain, via the `world-atlas` package) and produces `src/data/world.topo.json` and `src/data/geo-meta.json` using topojson-server and topojson-simplify. The steps:
 
-1. Filter to the 197 countries plus the territories, and assign stable IDs.
-2. Merge or split features where Natural Earth differs from our country list. For example, Somaliland is merged into Somalia and Northern Cyprus into Cyprus. The script keeps a list of these overrides.
-3. Simplify until the file is ≤ 600 KB, while keeping islands. Small polygons are never dropped.
-4. Quantize to TopoJSON, which makes shared borders exact.
+1. Map every feature to a country or a territory by its Natural Earth name. Any feature that isn't accounted for fails the build.
+2. Merge Somaliland into Somalia, Northern Cyprus into Cyprus, and the Siachen Glacier into India. Drop Antarctica.
+3. Sort shapes largest first, so enclaves (Vatican City, San Marino, Lesotho) draw on top and receive clicks.
+4. Pin every point of shapes smaller than about 12,000 km² so microstates survive simplification. Keep 50% of the remaining points and quantize at 1e5. The output is 402 KB, or 145 KB gzipped.
+5. Write `geo-meta.json`: an anchor (centroid of the largest polygon) for each id, and a `tiny` flag when the largest landmass is under 9 px across on a 1280 px world map. 51 countries are tiny. Tuvalu has no polygon at 1:50m, so it gets a fixed anchor and a marker only.
 
-The generated file is committed, so a normal `npm run build` doesn't need mapshaper.
+Both generated files are committed, so `npm run build` doesn't need the pipeline.
 
 ### Data validation (unit test)
 
@@ -120,14 +121,14 @@ All matching code is pure functions, tested exhaustively.
 
 ### Normalization: `normalize(s)`
 
-1. NFKD, then strip combining marks (`Côte d'Ivoire` → `cote d'ivoire`).
+1. NFKD, then strip combining marks.
 2. Lowercase. `&` becomes ` and `.
-3. Replace punctuation (`. , ' ’ - ( )`) with a space, and collapse whitespace.
-4. Drop a leading `the `.
-5. Canonicalize `st` and `saint` to `saint`.
-6. Trim.
+3. Delete apostrophes, and turn every other non-alphanumeric character into a space.
+4. Split into words and drop the filler words `the`, `and` and `of` wherever they appear.
+5. Canonicalize `st` to `saint`.
+6. Join the words with no spaces.
 
-`"St. Kitts & Nevis"`, `"saint kitts and nevis"` and `"Saint-Kitts and Nevis"` all normalize to the same string.
+`"St. Kitts & Nevis"`, `"saint kitts and nevis"` and `"Saint-Kitts and Nevis"` all become `saintkittsnevis`. `"Côte d'Ivoire"` and `"cote divoire"` both become `cotedivoire`, and `"newzealand"` matches New Zealand.
 
 ### Index
 
@@ -167,26 +168,30 @@ The index is a `Map<normalizedName, countryId>` built from the name and aliases 
 
 ```ts
 type MatchResult =
-  | { kind: 'accept'; id: string }
-  | { kind: 'hold'; id: string }          // exact match, but also a prefix of another unfound name
+  | { kind: 'accept'; id: string; corrected: boolean } // corrected: accepted despite a typo
+  | { kind: 'hold'; id: string }          // exact match, but the start of a longer unfound name
   | { kind: 'already'; id: string }
   | { kind: 'outOfScope'; id: string }    // a real country outside the selected regions
-  | { kind: 'territory'; note: string }
+  | { kind: 'territory'; id: string }     // the UI looks up the territory's note
   | { kind: 'none' };
 ```
 
-1. **Exact match** (the normalized input is in the index):
-   - Already found → `already`.
-   - Not in the selected regions → `outOfScope`.
-   - It's a strict prefix of another *unfound, in-scope* name → `hold`. The UI accepts after 600 ms of no typing, or immediately on Enter.
-   - Otherwise → `accept`. The UI clears the input.
+1. **Exact match while typing** (`matchTyped`; the normalized input is in the index):
+   - If the input is the start of any longer name in the index whose country isn't found yet (including a longer alias of the same country, or a territory), the player may still be typing:
+     - If it would otherwise be accepted → `hold`. The UI accepts after 600 ms with no typing, or immediately on Enter.
+     - Otherwise → `none`. So "niger" says nothing while "nigeria" is still possible, even when Niger is already found.
+   - Otherwise, in this order:
+     - Territory → `territory`.
+     - Already found → `already`.
+     - Not in the selected regions → `outOfScope`.
+     - Otherwise → `accept`. The UI clears the input.
 2. **Fuzzy match, only on Enter** (`matchSubmitted`). If there's no exact match:
    - The threshold is Damerau-Levenshtein ≤ 1 for names of 5–9 characters, ≤ 2 for 10 or more, and exact-only for names under 5.
    - Accept only if exactly one name in the **whole index, all countries and territories,** is within the threshold. This rule alone blocks Iran/Iraq, Austria/Australia, Slovenia/Slovakia, Niger/Nigeria, Mali/Malawi, Gambia/Zambia and the Guinea variants, because each has a neighbor within range.
-   - On accept, the full name briefly shows in the toast so the player sees what was accepted.
+   - On accept, the toast says "Accepted as Brazil". The correction travels in the `found` event, so the regular found toast doesn't overwrite it.
 3. Otherwise → `none`. The input shakes gently and keeps its text.
 
-**Identify mode** uses the same normalization but compares only against the target's names, with the same fuzzy rules. A correct guess is accepted as you type. A wrong one is checked on Enter: it shakes, counts as a miss attempt, and the input clears.
+**Identify mode** uses the same normalization but compares only against the target's names, with the same fuzzy rules. A correct guess is accepted as you type. A wrong one is checked on Enter: the input shakes and clears. Wrong attempts are not counted.
 
 ### Required test cases (non-exhaustive)
 
@@ -217,23 +222,24 @@ interface GameConfig {
 ```ts
 interface GameState {
   config: GameConfig;
-  pool: string[];                 // in-scope country IDs; order is shuffled for locate/identify
-  found: Set<string>;
-  missed: Set<string>;            // locate/identify: skipped or out of tries; type: filled at end
-  hintsUsed: number;
-  activeHint: { id: string; level: 1 | 2 } | null;
-  target: string | null;          // locate/identify: current country
-  triesLeft: number;              // locate: 3 per target
   phase: 'setup' | 'playing' | 'paused' | 'review';
-  startedAt: number; elapsedMs: number; pausedAt: number | null;
+  pool: string[];                 // in-scope country IDs, alphabetical
+  queue: string[];                // locate/identify: shuffled targets left; queue[0] is the current one
+  found: string[];                // in the order found
+  missed: string[];               // locate/identify: skipped or out of tries; everything unfound at the end
+  hintsUsed: number;
+  hint: { id: string; level: 1 | 2 } | null;
+  triesLeft: number;              // locate: 3 per target
+  elapsedMs: number;              // active time banked before the current run
+  runningSince: number | null;    // clock time the current run began; null while not running
   endReason: 'complete' | 'timeout' | 'gaveUp' | null;
-  lastFound: string | null;       // drives the "just found" glow
+  event: (GameEvent & { seq: number }) | null; // latest happening: found, wrong, revealed, hint
 }
 ```
 
 ### Actions
 
-`start`, `guessTyped`, `guessSubmitted`, `clickCountry`, `skip`, `hint`, `pause`, `resume`, `tick`, `giveUp`, `playAgain`, `toSetup`.
+`start` (carries the shuffled order), `found` (from typing, with an optional `corrected` flag), `click` (locate), `skip`, `hint` (carries a random number), `pause`, `resume`, `tick`, `giveUp` and `toSetup`. Every time-dependent action carries `now`, so the reducer stays pure. "Play again" is just `start` with the same config.
 
 ### Rules by mode
 
@@ -248,7 +254,7 @@ interface GameState {
   - `skip` reveals the target, adds it to `missed`, and advances.
 - **Identify**
   - A correct name adds the target to `found` and advances.
-  - A wrong submission shakes the input and counts the attempt.
+  - A wrong submission shakes the input and clears it. It isn't counted.
   - `skip` reveals the target, adds it to `missed`, and advances.
 - **Locate/Identify end:** the game ends when the pool is exhausted, the timer runs out, or the player gives up. Unvisited targets count as missed.
 
@@ -349,16 +355,16 @@ Behind the card, the map previews the selection live: selected regions are highl
 **3. Review (after complete, timeout or give-up).** Same map, now showing found (bronze) and missed (coral).
 - **Top bar:** score, time, hints used, a "New best" badge when earned, Change setup, and Play again (Enter).
 - **Right panel:** "Missed · N", grouped by region. Hovering a name lights up the country; hovering a missed country shows a tooltip with its name and region. Clicking a name zooms to that country.
-- In locate and identify modes, the list also shows attempted-but-wrong items.
 
 ### The map (`src/map/`)
 
-- **Projection:** Equal Earth. For each scope, `fitExtent` to the in-scope features, inset by the chrome's safe area.
-  - The safe area is the top bar on every screen, plus the setup card's width on the setup screen and the review panel's width on the review screen.
-  - For an Oceania scope the projection rotates to center around 160°E, so it doesn't split across the antimeridian.
+- **Projection:** a single Equal Earth projection fits the whole world to the viewport. Every scope frame is a d3-zoom transform onto the in-scope features, inside the chrome's safe area, so changing scope is just an animated zoom.
+  - The safe area excludes the top bar on every screen, plus the setup card's width on the setup screen and the review panel's width on the review screen.
+  - Each country frames only its polygons within 30° of its main landmass, so France frames without French Guiana. Russia frames as European Russia.
+  - For an Oceania-only scope the projection rotates to center around 160°E, so it doesn't split across the antimeridian.
 - **Rendering:** one `<path>` per feature. Classes for state (`unfound`, `found`, `just`, `missed`, `off`, `hint`, `target`) drive all styling through CSS custom properties. Paths are memoized, and only class changes re-render.
-- **Zoom and pan:** d3-zoom with scale between 1× and 40×, panning limited to the scope's bounds, plus a double-click to zoom. Scope changes and zoom-to-country animate over 500 ms. When the player has reduced motion turned on, they jump.
-- **Tiny countries:** `<circle>` markers that stay the same size on screen at any zoom (6px visible radius, 14px invisible hit area). Markers fade out once the real shape is larger than about 12px on screen.
+- **Zoom and pan:** d3-zoom with scale between 0.3× and 60× of the world view, panning limited to the viewport's surroundings, plus a double-click to zoom. A drag of more than 5 px never counts as a click. Scope changes and zoom-to-country animate over about 550 ms. When the player has reduced motion turned on, they jump.
+- **Tiny countries:** `<circle>` markers that stay the same size on screen at any zoom (5px visible radius, 14px invisible hit area). A marker fades out as the country's largest landmass grows from 12 to 24px on screen.
 - **Hit testing:** pointer events on the paths and markers. Out-of-scope paths have `pointer-events: none`.
 - **Not color alone:** missed countries also get a diagonal hatch pattern, and found countries get a subtle inner stroke.
 
@@ -379,7 +385,8 @@ Behind the card, the map previews the selection live: selected regions are highl
 - The input or prompt sticks to the top of the on-screen keyboard (using the `visualViewport` API). The map fills what's left.
 - Pinch to zoom.
 - Locate mode on touch: tapping a tiny country, or one whose shape is under 24px on screen, first zooms to it and asks for a confirming tap.
-- The setup card becomes a bottom sheet, and the review panel becomes a bottom sheet you can swipe up.
+- The setup card becomes a bottom sheet, and the review panel becomes a fixed bottom sheet (40% of the height) with a scrolling list.
+- A `?` typed into the guess box asks for a hint, because phone keyboards send no usable key events.
 
 ### Accessibility
 
@@ -432,5 +439,20 @@ wrangler.jsonc, vercel.json
 ## Risks and open items
 
 - **Natural Earth disputed borders:** Kashmir, Western Sahara, Crimea and others. Use Natural Earth's default "de facto" view and accept it; the territories list covers the guessable side.
-- **Geometry size vs. tiny-island fidelity:** if the 600 KB budget forces visible loss, split the data into a 110m world file plus 50m detail loaded when you zoom past 4×. That is still static, and still free-plan safe.
+- **Geometry size vs. tiny-island fidelity:** resolved. The 1:50m data at 402 KB keeps every island; microstates are pinned during simplification.
+- **Markers at world view on a phone** are dense. Revisit during design iteration.
+- **French Guiana** is part of France's shape, so it fills in when France is found. That's correct (Sporcle does the same) but may surprise players.
 - **The prefix-hold delay (600 ms)** needs tuning in playtesting.
+
+## Revisions after prototyping (2026-10-05)
+
+The whole app was prototyped and tested before the implementation plan was written. These changes came out of it and are reflected above:
+
+- **Geometry:** built with topojson-server/simplify from `world-atlas` instead of mapshaper. Shapes are sorted largest first, small shapes are pinned, and tiny is measured by the largest landmass.
+- **Normalization:** drops `the`, `and` and `of` everywhere and removes spaces.
+- **Hold rule:** covers longer aliases of the same country and territory names ("america" could still become "American Samoa").
+- **`MatchResult`:** territories carry an `id`, and accepted results carry `corrected`.
+- **Game state:** uses arrays and a target queue, and exposes the latest event with a sequence number for the UI to react to.
+- **Framing:** a single projection, with zoom transforms for all framing. Russia and far-flung territories are handled as described in the map section.
+- **Identify mode:** wrong answers aren't counted, and the review list shows missed countries only.
+- **Setup:** Enter always starts the game. Space still toggles a focused chip.
