@@ -21,4 +21,9 @@ describe('deploy headers', () => {
   it('client routes are never cached', () => {
     for (const path of ['/index.html', '/signin', '/me', '/leaderboards/*']) expect(read('public/_headers')).toContain(`${path}\n  Cache-Control: no-cache`);
   });
+
+  it('deploy refuses to run while wrangler.jsonc still has REPLACE_WITH_ placeholders', () => {
+    const deploy = JSON.parse(read('package.json')).scripts.deploy as string;
+    expect(deploy.startsWith('! grep -q REPLACE_WITH wrangler.jsonc && ')).toBe(true);
+  });
 });

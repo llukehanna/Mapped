@@ -9,7 +9,8 @@ export default defineConfig({
   webServer: {
     command: 'npm run build && npm run serve:e2e',
     port: 4173,
-    reuseExistingServer: true,
+    // Never reuse a stale server on 4173: the tests need a fresh local D1 and the current build.
+    reuseExistingServer: false,
     timeout: 180_000,
   },
   projects: [

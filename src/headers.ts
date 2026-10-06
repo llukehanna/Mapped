@@ -1,5 +1,5 @@
 /**
- * Content-Security-Policy for every response. Mirrored in public/_headers and vercel.json; a test keeps them in sync.
+ * Content-Security-Policy for every response. Mirrored in public/_headers; a test keeps them in sync.
  * The cloudflareinsights origins allow the Cloudflare Web Analytics beacon the lukeghanna.com zone injects.
  */
 export const CSP =
