@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { asPlayer, openSetup, pickName, start, typeLikeAPerson, watchErrors } from './helpers.ts';
+import { asPlayer, openSetup, pickName, signInFromSetup, start, typeLikeAPerson, watchErrors } from './helpers.ts';
 
 const SOUTH_AMERICA = ['Argentina', 'Bolivia', 'Brazil', 'Chile', 'Colombia', 'Ecuador', 'Guyana', 'Paraguay', 'Peru', 'Suriname', 'Uruguay', 'Venezuela'];
 
@@ -68,4 +68,41 @@ test('sign in from setup, then sign out', async ({ page }) => {
   await chip.click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+});
+
+test('a lost /finish response is retried once, so the run still saves', async ({ page }) => {
+  await openSetup(page);
+  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await start(page);
+  let attempts = 0;
+  await page.route('**/api/games/*/finish', (route) => (++attempts === 1 ? route.abort() : route.continue()));
+  await typeLikeAPerson(page, SOUTH_AMERICA);
+  await expect(page.locator('.savecard')).toContainText('Sign in to save this run');
+  expect(attempts).toBe(2);
+});
+
+test('the name card opens by itself once per session, and the menu can still open it', async ({ page }) => {
+  await asPlayer(page);
+  await openSetup(page);
+  await signInFromSetup(page);
+  const card = page.getByRole('dialog', { name: 'Pick a name' });
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Close' }).click();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'How well do you know the map?' })).toBeVisible();
+  await expect(card).toBeHidden();
+  await page.locator('.namechip').click();
+  await page.getByRole('menuitem', { name: 'Pick a name' }).click();
+  await expect(card).toBeVisible();
+});
+
+test('a session that has expired shows Sign in again instead of an error', async ({ page }) => {
+  const player = await asPlayer(page);
+  await openSetup(page);
+  await signInFromSetup(page);
+  await pickName(page, player.name);
+  await page.context().clearCookies();
+  await page.locator('.namechip').click();
+  await page.getByRole('menuitem', { name: 'Your games' }).click();
+  await expect(page.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
 });
