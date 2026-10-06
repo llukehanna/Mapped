@@ -1,0 +1,73 @@
+:root {
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --font-ui: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+  --radius: 12px;
+}
+
+/* Dark: lukeghanna.com studio. Unfound land is the lighter tone; found recedes; newest find glows. */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #100e0d;
+  --glow: radial-gradient(70% 60% at 50% 18%, #241d17 0%, #15120f 60%, #100e0d 100%);
+  --ink: #f0ebe3;
+  --mute: #a39d93;
+  --accent: #f2c14e;
+  --accent-soft: #f2c14e1f;
+  --accent-ink: #1c1a17;
+  --ocean: #13110f;
+  --sphere-line: #ffffff0c;
+  --grat: #ffffff06;
+  --land: #3a332c;
+  --land-hover: #4a4138;
+  --border: #13110f;
+  --found: #8a6f3e;
+  --just: #f2c14e;
+  --just-glow: drop-shadow(0 0 10px #f2c14ecc);
+  --missed: #d9654f;
+  --missed-line: #ffffff40;
+  --off: #1d1a17;
+  --territory: #26221e;
+  --marker: #d8cfc2aa;
+  --danger: #ff8a73;
+  --chrome-bg: linear-gradient(170deg, #ffffff17, #ffffff06);
+  --chrome-line: #ffffff18;
+  --chrome-shadow: 0 10px 30px #0006, 0 1px 0 #ffffff1f inset;
+  --panel-bg: #1c1916ee;
+  --label-halo: #13110f;
+  --focus: #f2c14e;
+}
+
+/* Light: paper atlas. Cream land, pale sea, found countries inked dark. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --page: #ebe6dc;
+  --glow: radial-gradient(80% 70% at 50% 10%, #f6f3ec 0%, #ebe6dc 100%);
+  --ink: #151412;
+  --mute: #6b6358;
+  --accent: #7a5a00;
+  --accent-soft: #7a5a001f;
+  --accent-ink: #fbf8f2;
+  --ocean: #dfe6e6;
+  --sphere-line: #00000014;
+  --grat: #0000000a;
+  --land: #f7f4ee;
+  --land-hover: #ece6da;
+  --border: #b9b1a3;
+  --found: #2f3a33;
+  --just: #7a5a00;
+  --just-glow: none;
+  --missed: #b5432f;
+  --missed-line: #ffffff66;
+  --off: #e4dfd5;
+  --territory: #e9e4da;
+  --marker: #6b6358;
+  --danger: #b5432f;
+  --chrome-bg: linear-gradient(170deg, #ffffffcc, #ffffff99);
+  --chrome-line: #00000014;
+  --chrome-shadow: 0 10px 30px #0000001a, 0 1px 0 #ffffff inset;
+  --panel-bg: #fbf9f5ee;
+  --label-halo: #fbf9f5;
+  --focus: #7a5a00;
+}
