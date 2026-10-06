@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { COUNTRIES } from '../../src/data/countries.ts';
-import { LOCAL_IMPORT_BEFORE, MAX_IMPORTS_PER_REQUEST, type BoardResponse, type MyGamesResponse } from '../../src/api/types.ts';
+import { LOCAL_IMPORT_BEFORE, MAX_IMPORTED_PER_ACCOUNT, MAX_IMPORTS_PER_REQUEST, type BoardResponse, type MyGamesResponse } from '../../src/api/types.ts';
 import { poolFor } from '../../src/game/scope.ts';
 import type { GameConfig } from '../../src/game/types.ts';
 import type { D1Database, Env } from '../../worker/env.ts';
@@ -95,6 +95,26 @@ describe('importing pre-accounts bests', () => {
     const many = Array.from({ length: MAX_IMPORTS_PER_REQUEST + 5 }, (_, i) => entry({ at: JUNE + i }));
     expect(MAX_IMPORTS_PER_REQUEST).toBe(25);
     expect(await importCount(ana, many)).toBe(25);
+  });
+
+  it('stops at 200 imported games per account, truncating the request that crosses the line', async () => {
+    const ana = await signIn(env, 'ana@example.com');
+    expect(MAX_IMPORTED_PER_ACCOUNT).toBe(200);
+    const batch = (from: number) => Array.from({ length: MAX_IMPORTS_PER_REQUEST }, (_, i) => entry({ at: JUNE + from + i }));
+    for (let n = 0; n < 7; n++) expect(await importCount(ana, batch(n * 25))).toBe(25);
+    // 175 in; room for 25 more.
+    expect(await importCount(ana, batch(175))).toBe(25);
+    expect(await importCount(ana, batch(200))).toBe(0);
+    expect(await db.prepare("SELECT count(*) AS n FROM games WHERE user_id IS NOT NULL AND unranked_reason = 'imported'").first<{ n: number }>()).toEqual({ n: 200 });
+    // The allowance is per account.
+    expect(await importCount(await signIn(env, 'bo@example.com'), batch(0))).toBe(25);
+  });
+
+  it('truncates to the remaining allowance', async () => {
+    const ana = await signIn(env, 'ana@example.com');
+    for (let n = 0; n < 7; n++) await importCount(ana, Array.from({ length: 25 }, (_, i) => entry({ at: JUNE + n * 25 + i })));
+    expect(await importCount(ana, Array.from({ length: 10 }, (_, i) => entry({ at: JUNE + 500 + i })))).toBe(10);
+    expect(await importCount(ana, Array.from({ length: 25 }, (_, i) => entry({ at: JUNE + 600 + i })))).toBe(15);
   });
 
   it('never ranks: no board row, no best', async () => {

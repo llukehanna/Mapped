@@ -1,5 +1,5 @@
 import { COUNTRIES } from '../src/data/countries.ts';
-import { LOCAL_IMPORT_BEFORE, MAX_IMPORTS_PER_REQUEST } from '../src/api/types.ts';
+import { LOCAL_IMPORT_BEFORE, MAX_IMPORTED_PER_ACCOUNT, MAX_IMPORTS_PER_REQUEST } from '../src/api/types.ts';
 import { parseConfig } from '../src/game/ranking.ts';
 import { poolFor, scopeKey } from '../src/game/scope.ts';
 import { requireUser } from './auth.ts';
@@ -7,7 +7,7 @@ import { hmac } from './crypto.ts';
 import type { D1PreparedStatement, Env } from './env.ts';
 import { json, readBody } from './http.ts';
 
-export { MAX_IMPORTS_PER_REQUEST };
+export { MAX_IMPORTED_PER_ACCOUNT, MAX_IMPORTS_PER_REQUEST };
 
 const LAUNCH_YEAR_START = Date.parse('2026-01-01');
 const DAY_MS = 86_400_000;
@@ -39,6 +39,10 @@ export async function importBests(req: Request, env: Env): Promise<Response> {
       ).bind(id, user.id, JSON.stringify(config), config.mode, scope, at - ms, at, found, total, hints, ms, found === total ? 'complete' : 'gaveUp'),
     );
   }
-  const results = inserts.length > 0 ? await env.DB.batch(inserts) : [];
+  // Each row is a D1 write, so an account can only ever import so many.
+  const have = await env.DB.prepare("SELECT count(*) AS n FROM games WHERE user_id = ? AND unranked_reason = 'imported'").bind(user.id).first<{ n: number }>();
+  const room = Math.max(0, MAX_IMPORTED_PER_ACCOUNT - have!.n);
+  const batch = inserts.slice(0, room);
+  const results = batch.length > 0 ? await env.DB.batch(batch) : [];
   return json({ imported: results.reduce((n, r) => n + r.meta.changes, 0) });
 }
