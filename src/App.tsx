@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type
 import { api, signInHref, type ApiError } from './api/client.ts';
 import { addClaim, migrateClaims, readClaims, removeClaims, saveResume, sessionStore, takeResume, type Run, type SaveState } from './api/resume.ts';
 import { useSession } from './api/session.ts';
-import { MAX_CLAIMS_PER_REQUEST, type BestSummary } from './api/types.ts';
+import { LOCAL_IMPORT_BEFORE, MAX_CLAIMS_PER_REQUEST, MAX_IMPORTS_PER_REQUEST, type BestSummary } from './api/types.ts';
 import { COUNTRIES } from './data/countries.ts';
 import { GEO_META } from './data/geoMeta.ts';
 import { COUNTRY, nameOf } from './data/lookup.ts';
@@ -21,7 +21,7 @@ import { rotationFor, type Rect } from './map/geometry.ts';
 import { useShapes } from './map/useShapes.ts';
 import { WorldMap, type Highlight, type MapHandle } from './map/WorldMap.tsx';
 import { buildIndex } from './match/nameIndex.ts';
-import { readBest, recordResult } from './store/bests.ts';
+import { localBests, readBest, recordResult } from './store/bests.ts';
 import { readJson, safeStorage, writeJson } from './store/storage.ts';
 import { readTheme, writeTheme, type Theme } from './store/theme.ts';
 import { GuessInput } from './ui/GuessInput.tsx';
@@ -59,6 +59,8 @@ const FINISH_RETRY_MS = 800;
 const session = sessionStore();
 /** The name card opens by itself once per browser session; the user menu can open it any time. */
 const NAME_ASKED = 'mapped:name-asked:v1';
+/** Emails whose pre-accounts bests are already in their accounts (a JSON array in localStorage). */
+const IMPORTED = 'mapped:imported:v1';
 /** `?seed=42` makes target order reproducible (used by end-to-end tests). */
 const SEED = Number(new URLSearchParams(window.location.search).get('seed')) || null;
 const random = SEED ? seededRandom(SEED) : Math.random;
@@ -224,7 +226,7 @@ export function App() {
     setAnnouncement(`Game over. ${state.found.length} of ${state.pool.length}.`);
   }, [state.phase]);
 
-  // Once we know who's signed in: come back from Google, claim games played signed out, load bests.
+  // Once we know who's signed in: come back from Google, claim games played signed out, import old local bests, load bests.
   const loaded = useRef(false);
   useEffect(() => {
     if (user === undefined || loaded.current) return;
@@ -254,6 +256,7 @@ export function App() {
     const claims = readClaims(storage, Date.now());
     if (claims.length === 0) refreshBests();
     else void claimAll(claims, resume?.run?.id);
+    void importLocalBests(user.email);
   }, [user]);
 
   // Already signed in: /signin has nothing to show.
@@ -276,6 +279,22 @@ export function App() {
       }
     }
     refreshBests();
+  }
+
+  /** Once per account on this browser: sends the bests saved before accounts to Your games (unranked). A failure other than 401 leaves it to retry next load. */
+  async function importLocalBests(email: string) {
+    const done = readJson<string[]>(storage, IMPORTED) ?? [];
+    if (done.includes(email)) return;
+    const results = localBests(storage)
+      .filter((b) => b.result.at < LOCAL_IMPORT_BEFORE)
+      .map(({ config, result }) => ({ config, ...result }));
+    try {
+      for (let i = 0; i < results.length; i += MAX_IMPORTS_PER_REQUEST) await api.importBests(results.slice(i, i + MAX_IMPORTS_PER_REQUEST));
+    } catch (e) {
+      if ((e as ApiError).status === 401) setUser(null);
+      return;
+    }
+    writeJson(storage, IMPORTED, [...(readJson<string[]>(storage, IMPORTED) ?? []), email]);
   }
 
   /** Reloads your bests, and the rank on the save card (it changes once you pick a name). */

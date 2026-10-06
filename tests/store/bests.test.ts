@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestKey, isBetter, readBest, recordResult, type Result } from '../../src/store/bests.ts';
+import { bestKey, isBetter, localBests, readBest, recordResult, type Result } from '../../src/store/bests.ts';
 import { readTheme, writeTheme } from '../../src/store/theme.ts';
 import type { GameConfig } from '../../src/game/types.ts';
 
@@ -48,6 +48,45 @@ describe('bests', () => {
     expect(recordResult(null, config, r(1, 1))).toBe(true);
     expect(readBest(new BrokenStorage(), config)).toBeNull();
     expect(() => recordResult(new BrokenStorage(), config, r(1, 1))).not.toThrow();
+  });
+});
+
+describe('localBests', () => {
+  const configs: GameConfig[] = [
+    config,
+    { mode: 'locate', scope: { continents: [], subregions: [] }, timeLimitSec: 600 },
+    { mode: 'identify', scope: { continents: ['asia'], subregions: ['Caribbean'] }, timeLimitSec: null },
+  ];
+
+  it('reads back every setup bestKey wrote', () => {
+    const s = new MemoryStorage();
+    configs.forEach((c, i) => recordResult(s, c, r(50 + i, 1000)));
+    const found = localBests(s);
+    expect(found).toHaveLength(3);
+    for (const [i, c] of configs.entries()) {
+      expect(found).toContainEqual({ config: { mode: c.mode, scope: { continents: [...c.scope.continents].sort(), subregions: c.scope.subregions }, timeLimitSec: c.timeLimitSec }, result: r(50 + i, 1000) });
+    }
+  });
+
+  it('skips other keys, malformed keys and malformed values', () => {
+    const s = new MemoryStorage();
+    recordResult(s, config, r(80, 700_000));
+    s.setItem('mapped:theme:v1', '"light"');
+    s.setItem('mapped:claims:v1', '[]');
+    s.setItem('mapped:best:v1:type:world', JSON.stringify(r(1, 1)));
+    s.setItem('mapped:best:v1:type:world:none:extra', JSON.stringify(r(1, 1)));
+    s.setItem('mapped:best:v1:type:world:abc', JSON.stringify(r(1, 1)));
+    s.setItem('mapped:best:v1:type:world:-5', JSON.stringify(r(1, 1)));
+    s.setItem('mapped:best:v1:race:world:none', JSON.stringify(r(1, 1)));
+    s.setItem('mapped:best:v1:type:world:none', '{not json');
+    s.setItem('mapped:best:v1:locate:world:none', JSON.stringify({ found: 'x' }));
+    s.setItem('mapped:best:v1:identify:world:none', 'null');
+    expect(localBests(s)).toEqual([{ config: { mode: 'type', scope: { continents: ['africa', 'europe'], subregions: [] }, timeLimitSec: null }, result: r(80, 700_000) }]);
+  });
+
+  it('is empty without storage', () => {
+    expect(localBests(null)).toEqual([]);
+    expect(localBests(new BrokenStorage())).toEqual([]);
   });
 });
 

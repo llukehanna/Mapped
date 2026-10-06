@@ -1,12 +1,29 @@
 import type { Board } from '../game/ranking.ts';
-import type { EndReason, Mode } from '../game/types.ts';
+import type { EndReason, GameConfig, Mode } from '../game/types.ts';
 
 /** Shared between the Worker and the browser: the JSON each API route sends back. */
 
 /** Most claims one /api/games/claim request handles (each costs several D1 queries). */
 export const MAX_CLAIMS_PER_REQUEST = 8;
 
-export type UnrankedReason = 'custom' | 'incomplete' | 'paused' | 'unverified' | 'anonymous';
+/** Most bests one /api/me/import request takes; the browser sends its saved bests in batches of this many. */
+export const MAX_IMPORTS_PER_REQUEST = 25;
+
+/** Bests saved in the browser before this moment (the v2 launch, 2026-10-06 21:30 UTC) are imported; later runs already went to the server. */
+export const LOCAL_IMPORT_BEFORE = 1791322200000;
+
+/** One best the browser saved before accounts, as POST /api/me/import takes it. */
+export interface ImportEntry {
+  config: GameConfig;
+  found: number;
+  total: number;
+  ms: number;
+  hints: number;
+  /** epoch ms when the game ended */
+  at: number;
+}
+
+export type UnrankedReason = 'custom' | 'incomplete' | 'paused' | 'unverified' | 'anonymous' | 'imported';
 
 export interface User {
   /** null until the player picks one */

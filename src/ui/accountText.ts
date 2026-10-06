@@ -11,6 +11,7 @@ export const REASON_TEXT: Record<UnrankedReason, string> = {
   paused: 'paused',
   unverified: "couldn't verify",
   anonymous: 'not signed in',
+  imported: 'played before accounts',
 };
 
 /** "m•••@gmail.com" */

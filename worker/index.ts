@@ -2,6 +2,7 @@ import { deleteMe, googleCallback, googleStart, me, nameAvailable, setName, sign
 import { getBoard, myGames } from './boards.ts';
 import type { Env } from './env.ts';
 import { claimGames, finishGame, startGame } from './games.ts';
+import { importBests } from './imports.ts';
 import { checkWrite, errorResponse, HttpError, isLocalHost } from './http.ts';
 
 type Handler = (req: Request, env: Env, params: string[]) => Promise<Response>;
@@ -15,6 +16,7 @@ const ROUTES: [method: string, path: RegExp, handler: Handler][] = [
   ['GET', /^\/api\/me$/, me],
   ['DELETE', /^\/api\/me$/, deleteMe],
   ['GET', /^\/api\/me\/games$/, myGames],
+  ['POST', /^\/api\/me\/import$/, importBests],
   ['POST', /^\/api\/games$/, startGame],
   ['POST', /^\/api\/games\/claim$/, claimGames],
   ['POST', /^\/api\/games\/([\w-]{1,64})\/finish$/, (req, env, [id]) => finishGame(req, env, id)],
