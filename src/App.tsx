@@ -93,7 +93,7 @@ export function App() {
     setToast({ text, tone, seq: toastSeq.current });
     setAnnouncement(text);
   };
-  const guess = useGuess({ state, dispatch, index: INDEX, say, flash: flashJust, onHint: () => dispatch({ type: 'hint', rand: random() }) });
+  const guess = useGuess({ state, dispatch, index: INDEX, say, flash: flashJust, onHint: () => dispatch({ type: 'hint', rand: random(), now: Date.now() }) });
 
   const playing = state.phase === 'playing' || state.phase === 'paused';
   const mode = state.config.mode;
@@ -199,7 +199,7 @@ export function App() {
     setConfirming(null);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
-  const hint = () => dispatch({ type: 'hint', rand: random() });
+  const hint = () => dispatch({ type: 'hint', rand: random(), now: Date.now() });
   const togglePause = () =>
     dispatch(state.phase === 'paused' ? { type: 'resume', now: Date.now() } : { type: 'pause', now: Date.now() });
   // Give up always goes through one central dialog, which pauses the clock while it's open.
