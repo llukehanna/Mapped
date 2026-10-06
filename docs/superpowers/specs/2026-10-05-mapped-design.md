@@ -461,3 +461,4 @@ The whole app was prototyped and tested before the implementation plan was writt
 - **Identify mode:** wrong answers aren't counted, and the review list shows missed countries only.
 - **Setup:** Enter always starts the game. Space still toggles a focused chip.
 - **Map feel (design checkpoint):** Equal Earth with a globe outline felt off and too far out. Two rounds of side-by-side comparisons chose Patterson, edge to edge, framed tighter, with full-detail outlines and soft borders (a tone of each country's own fill instead of ocean-colored seams).
+- **Analytics:** the CSP allows `static.cloudflareinsights.com` (script) and `cloudflareinsights.com` (connect), so the Cloudflare Web Analytics beacon the `lukeghanna.com` zone injects can run. It's the only third-party origin.

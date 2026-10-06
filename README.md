@@ -1,5 +1,7 @@
 # Mapped
 
+[![CI](https://github.com/llukehanna/Mapped/actions/workflows/ci.yml/badge.svg)](https://github.com/llukehanna/Mapped/actions/workflows/ci.yml)
+
 How well do you know the map? Name every country, find them by clicking, or identify the highlighted one. Live at [mapped.lukeghanna.com](https://mapped.lukeghanna.com).
 
 No accounts and no backend. Each game starts fresh; best results stay in your browser.
