@@ -14,14 +14,29 @@ interface CenterCardProps {
 export function CenterCard({ label, title, subtitle, wide = false, onClose, children }: CenterCardProps) {
   const close = useRef(onClose);
   close.current = onClose;
+  const section = useRef<HTMLElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    previousFocus.current = document.activeElement as HTMLElement | null;
+    if (section.current && !section.current.contains(document.activeElement)) {
+      section.current.focus();
+    }
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  useEffect(() => {
+    return () => {
+      if (previousFocus.current && document.contains(previousFocus.current)) {
+        previousFocus.current.focus();
+      }
+    };
+  }, []);
   return (
     <div className="veil" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <section className={`center-card glass ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={label}>
+      <section ref={section} className={`center-card glass ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
         <div className="card-head">
           <div>
             <h2 className="card-title">{title}</h2>

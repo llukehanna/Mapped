@@ -48,8 +48,8 @@ export function YourGames({ user, onBoard, onClose }: { user: User; onBoard: (bo
                         {b.rank && <span className="gold mono">#{b.rank}</span>}
                       </button>
                     ) : (
-                      <span key={m} className="best-cell none">
-                        —
+                      <span key={m} className="best-cell none" aria-label="No run yet">
+                        ·
                       </span>
                     );
                   })}
