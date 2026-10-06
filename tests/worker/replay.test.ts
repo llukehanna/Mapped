@@ -102,11 +102,11 @@ describe('doctored logs', () => {
     expect(verdict(cfg(), hidden, honest.at(-1)!.t + 300)).toMatchObject({ reason: 'unverified' });
   });
 
-  it('a locate log made for a different target order does not complete', () => {
+  it('a locate log made for a different target order does not replay: its first click misses the server target', () => {
     const config = cfg({ mode: 'locate' });
     const other = play(config, clickTarget, 2000, 7);
-    const v = verdict(config, other);
-    expect(v === null || v.reason !== null).toBe(true);
+    expect(replay(config, SEED, other)).toBeNull();
+    expect(verdict(config, other)).toBeNull();
   });
 
   it('finds of countries outside the game, or repeats, do not replay', () => {

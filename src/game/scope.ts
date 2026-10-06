@@ -18,11 +18,14 @@ export function inScope(country: CountryDef, scope: Scope): boolean {
   return isWorld(scope) || scope.continents.includes(country.continent) || scope.subregions.includes(country.subregion);
 }
 
-/** In-scope country ids, alphabetical by name. */
+/**
+ * In-scope country ids, sorted by id with plain code-unit comparison. The browser and the Worker both
+ * shuffle this list with the same seed, so the order must not depend on the runtime's locale.
+ */
 export function poolFor(scope: Scope, countries: readonly CountryDef[]): string[] {
   return countries
     .filter((c) => inScope(c, scope))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((c) => c.id);
 }
 

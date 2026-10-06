@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { COUNTRIES } from '../../src/data/countries.ts';
 import { poolFor, scopeFromKey, scopeKey, scopeLabel, subregionsOf, WORLD } from '../../src/game/scope.ts';
 import type { Scope } from '../../src/game/types.ts';
+
+const PINNED_FIRST_5 = ['AFG', 'AGO', 'ALB', 'AND', 'ARE'];
 
 describe('scope', () => {
   it('world is every country', () => expect(poolFor(WORLD, COUNTRIES)).toHaveLength(197));
@@ -11,8 +13,22 @@ describe('scope', () => {
     expect(pool).toHaveLength(12 + 13);
   });
 
-  it('sorts the pool by country name', () => {
+  it('sorts the pool by country id', () => {
     expect(poolFor({ continents: [], subregions: ['Australasia'] }, COUNTRIES)).toEqual(['AUS', 'NZL']);
+  });
+
+  it('orders the pool by id whatever the locale: client and server shuffle the same list', () => {
+    const first5 = () => poolFor(WORLD, COUNTRIES).slice(0, 5);
+    const before = first5();
+    expect(before).toEqual(PINNED_FIRST_5);
+    const reversed = vi.spyOn(String.prototype, 'localeCompare').mockImplementation(function (this: string, that: string) {
+      return this < that ? 1 : this > that ? -1 : 0;
+    });
+    try {
+      expect(first5()).toEqual(before);
+    } finally {
+      reversed.mockRestore();
+    }
   });
 
   it('lists subregions per continent', () => {
