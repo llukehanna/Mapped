@@ -113,6 +113,8 @@ export function App() {
   const starting = useRef(false);
   /** startedAt of the last game whose end was handled, so a restored review isn't saved twice. */
   const finished = useRef<number | null>(null);
+  /** The ID of the game currently on screen, to ignore stale /finish responses from earlier games. */
+  const currentRun = useRef<string | null>(null);
 
   const say = (text: string, tone: ToastMessage['tone']) => {
     toastSeq.current += 1;
@@ -231,9 +233,10 @@ export function App() {
       window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
     }
     const resume = takeResume(session, Date.now());
-    if (resume?.state.phase === 'review') {
+    if (resume?.state.phase === 'review' && keys.current.state.phase === 'setup') {
       finished.current = resume.state.startedAt;
-      dispatch({ type: 'restore', state: resume.state });
+      currentRun.current = resume.run?.id ?? null;
+      dispatch({ type: 'restore', state: { ...resume.state, event: null } });
       setRun(resume.run);
       setSave(resume.save);
     }
@@ -244,7 +247,7 @@ export function App() {
     api.claim(claims.map(({ id, claim }) => ({ id, claim }))).then(({ results }) => {
       clearClaims(session);
       const mine = results.find((r) => r.id === resume?.run?.id);
-      if (mine) setSave({ status: 'saved', result: mine });
+      if (mine && currentRun.current === mine.id) setSave({ status: 'saved', result: mine });
       refreshBests();
     }, refreshBests);
   }, [user]);
@@ -270,11 +273,13 @@ export function App() {
     setSave({ status: 'saving' });
     api.finishGame(game.id, log).then(
       (result) => {
-        setSave({ status: 'saved', result });
+        if (currentRun.current === game.id) setSave({ status: 'saved', result });
         if (game.claim) addClaim(session, { id: game.id, claim: game.claim }, Date.now());
         if (result.board && result.best) setBests((m) => new Map(m).set(result.board!, result.best!));
       },
-      (e: ApiError) => setSave(e.code === 'unverified' ? { status: 'unverified' } : { status: 'error' }),
+      (e: ApiError) => {
+        if (currentRun.current === game.id) setSave(e.code === 'unverified' ? { status: 'unverified' } : { status: 'error' });
+      },
     );
   }
 
@@ -296,6 +301,7 @@ export function App() {
     const online = await api.startGame(config).catch(() => null);
     starting.current = false;
     const pool = poolFor(config.scope, COUNTRIES);
+    currentRun.current = online?.id ?? null;
     setRun(online && { id: online.id, claim: online.claim, board: online.board });
     setSave(online ? null : { status: 'offline' });
     dispatch({ type: 'start', config, pool, order: shuffle(pool, online ? seededRandom(online.seed) : random), now: Date.now() });
@@ -357,10 +363,11 @@ export function App() {
       if (blocked) return;
       const inField = e.target instanceof HTMLInputElement;
       const onButton = e.target instanceof HTMLButtonElement;
+      const inCorner = e.target instanceof Element && !!e.target.closest('.corner, [role="menuitem"]');
       if (e.key === 'Escape' && asking) return void cancel();
       if (e.key === 'Escape' && (s.phase === 'playing' || s.phase === 'paused')) return void pause();
       // In setup, Enter always starts (Space still toggles a focused chip). In review it replays unless a button has focus.
-      if (e.key === 'Enter' && s.phase === 'setup' && !inField) {
+      if (e.key === 'Enter' && s.phase === 'setup' && !inField && !inCorner) {
         e.preventDefault();
         return void go();
       }
