@@ -9,16 +9,16 @@ describe('deploy headers', () => {
     expect(read('public/_headers')).toContain(`Content-Security-Policy: ${CSP}`);
   });
 
-  it('vercel.json carries the same CSP', () => {
-    const vercel = JSON.parse(read('vercel.json'));
-    const all = vercel.headers.find((h: { source: string }) => h.source === '/(.*)');
-    expect(all.headers).toContainEqual({ key: 'Content-Security-Policy', value: CSP });
+  it('wrangler runs the Worker only for /api/* and serves the app for client routes', () => {
+    const config = JSON.parse(read('wrangler.jsonc').replace(/^\s*\/\/.*$/gm, ''));
+    expect(config.main).toBe('worker/index.ts');
+    expect(config.assets).toEqual({ directory: './dist', not_found_handling: 'single-page-application', run_worker_first: ['/api/*'] });
+    expect(config.routes).toContainEqual({ pattern: 'mapped.lukeghanna.com', custom_domain: true });
+    expect(config.d1_databases).toEqual([expect.objectContaining({ binding: 'DB', database_name: 'mapped', migrations_dir: 'migrations' })]);
+    expect(config.vars.AUTH_MODE).toBe('google');
   });
 
-  it('wrangler serves static assets only, with no Worker script', () => {
-    const config = JSON.parse(read('wrangler.jsonc').replace(/^\s*\/\/.*$/gm, ''));
-    expect(config.main).toBeUndefined();
-    expect(config.assets.directory).toBe('./dist');
-    expect(config.routes).toContainEqual({ pattern: 'mapped.lukeghanna.com', custom_domain: true });
+  it('client routes are never cached', () => {
+    for (const path of ['/index.html', '/signin', '/me', '/leaderboards/*']) expect(read('public/_headers')).toContain(`${path}\n  Cache-Control: no-cache`);
   });
 });

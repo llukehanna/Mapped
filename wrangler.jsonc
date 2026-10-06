@@ -1,12 +1,20 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Static Vite build served as Workers static assets. No Worker script runs, so requests cost
-  // no CPU and don't count against the free plan's daily request limit.
+  // The Vite build is served as static assets. The Worker runs only for /api/* (run_worker_first),
+  // so loading the app and the map never costs a Worker request on the free plan.
   "name": "mapped",
+  "main": "worker/index.ts",
   "routes": [{ "pattern": "mapped.lukeghanna.com", "custom_domain": true }],
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "404-page"
-  }
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "mapped", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
+  ],
+  // Secrets (wrangler secret put): AUTH_SECRET, GOOGLE_CLIENT_SECRET. Local dev reads .dev.vars.
+  "vars": { "AUTH_MODE": "google", "GOOGLE_CLIENT_ID": "REPLACE_WITH_GOOGLE_CLIENT_ID" },
+  "observability": { "enabled": true }
 }
