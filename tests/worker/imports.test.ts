@@ -36,8 +36,10 @@ describe('importing pre-accounts bests', () => {
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     const complete = entry({ config: { mode: 'locate', scope: { continents: [], subregions: ['Caribbean'] }, timeLimitSec: 600 }, found: 5, total: poolFor({ continents: [], subregions: ['Caribbean'] }, COUNTRIES).length, at: JUNE + 1000 });
     expect(await importCount(ana, [entry(), complete])).toBe(2);
-    const { recent, bests } = await myGames(ana);
+    const { recent, bests, personal } = await myGames(ana);
     expect(bests).toEqual([]);
+    // They count as your personal best on their board (the custom Caribbean run has no board).
+    expect(personal).toEqual([{ board: 'type:europe', found: 40, total: EUROPE_TOTAL, hints: 2, ms: 600_000, ranked: false }]);
     expect(recent).toEqual([
       expect.objectContaining({ mode: 'locate', scopeKey: 'Caribbean', found: 5, endReason: 'gaveUp', ranked: false, reason: 'imported', isBest: false, finishedAt: JUNE + 1000 }),
       { id: expect.stringMatching(/^imp_/), mode: 'type', scopeKey: 'europe', found: 40, total: EUROPE_TOTAL, hints: 2, ms: 600_000, endReason: 'gaveUp', ranked: false, reason: 'imported', isBest: false, finishedAt: JUNE },

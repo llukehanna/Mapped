@@ -1,4 +1,4 @@
-import type { BestSummary, BoardResponse, BoardRow, MyGamesResponse, RecentGame } from '../src/api/types.ts';
+import type { BestSummary, BoardResponse, BoardRow, MyGamesResponse, PersonalBest, RecentGame } from '../src/api/types.ts';
 import { parseBoard, type Board, type Run } from '../src/game/ranking.ts';
 import type { EndReason, Mode } from '../src/game/types.ts';
 import { currentUser, requireUser } from './auth.ts';
@@ -77,8 +77,14 @@ export async function getBoard(req: Request, env: Env, mode: string, region: str
 /** GET /api/me/games */
 export async function myGames(req: Request, env: Env): Promise<Response> {
   const user = await requireUser(req, env);
-  const [bests, recent] = await env.DB.batch([
+  const [bests, personal, recent] = await env.DB.batch([
     env.DB.prepare('SELECT board, hints, ms, finished_at FROM bests WHERE user_id = ?').bind(user.id),
+    env.DB.prepare(
+      `SELECT board, found, total, hints, ms, ranked FROM (
+         SELECT g.*, row_number() OVER (PARTITION BY board ORDER BY found DESC, ranked DESC, hints, ms, finished_at) AS n
+         FROM games g WHERE user_id = ? AND board IS NOT NULL AND finished_at IS NOT NULL
+       ) WHERE n = 1`,
+    ).bind(user.id),
     env.DB.prepare(
       `SELECT g.id, g.mode, g.scope_key, g.found, g.total, g.hints, g.ms, g.end_reason, g.ranked, g.unranked_reason, g.finished_at,
               b.game_id IS NOT NULL AS is_best
@@ -113,5 +119,7 @@ export async function myGames(req: Request, env: Env): Promise<Response> {
     isBest: g.is_best === 1,
     finishedAt: g.finished_at,
   }));
-  return json({ bests: ranked, recent: games } satisfies MyGamesResponse);
+  type PersonalRow = Omit<PersonalBest, 'ranked'> & { ranked: number };
+  const mine: PersonalBest[] = (personal.results as PersonalRow[]).map((p) => ({ ...p, ranked: p.ranked === 1 }));
+  return json({ bests: ranked, personal: mine, recent: games } satisfies MyGamesResponse);
 }

@@ -154,6 +154,9 @@ test('a best saved before accounts shows up in Your games, unranked, after signi
   await expect(row).toContainText('Europe · Type');
   await expect(row).toContainText('40/45');
   await expect(row).toContainText('Unranked: played before accounts');
+  // It is also your personal best on Europe · Type: found/total instead of a time, and no rank.
+  const cell = page.getByRole('dialog', { name: 'Your games' }).locator('.bests-row', { hasText: 'Europe' }).locator('.best-cell').first();
+  await expect(cell).toHaveText('40/45 · 2 hints');
 });
 
 test('claims saved in sessionStorage by an older version move to localStorage on load, even signed out', async ({ page }) => {

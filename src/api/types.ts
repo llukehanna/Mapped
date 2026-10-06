@@ -100,7 +100,19 @@ export interface RecentGame {
   finishedAt: number;
 }
 
+/** Your best run on a board, finished or not: most found, then a ranked run, then fewer hints, then faster. */
+export interface PersonalBest {
+  board: Board;
+  found: number;
+  total: number;
+  hints: number;
+  ms: number;
+  ranked: boolean;
+}
+
 export interface MyGamesResponse {
+  /** Leaderboard bests (ranked runs only). */
   bests: (BestSummary & { board: Board })[];
+  personal: PersonalBest[];
   recent: RecentGame[];
 }

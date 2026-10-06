@@ -1,6 +1,6 @@
 import { COUNTRIES } from '../src/data/countries.ts';
 import { LOCAL_IMPORT_BEFORE, MAX_IMPORTED_PER_ACCOUNT, MAX_IMPORTS_PER_REQUEST } from '../src/api/types.ts';
-import { parseConfig } from '../src/game/ranking.ts';
+import { boardFor, parseConfig } from '../src/game/ranking.ts';
 import { poolFor, scopeKey } from '../src/game/scope.ts';
 import { requireUser } from './auth.ts';
 import { hmac } from './crypto.ts';
@@ -15,7 +15,7 @@ const intIn = (v: unknown, min: number, max: number): v is number => Number.isIn
 
 /**
  * POST /api/me/import { results: [{ config, found, total, ms, hints, at }] }: bests the browser saved before accounts existed.
- * They are unverified, so they only show in Your games: no board, no best, never ranked. Entries that don't check out are skipped.
+ * They are unverified, so they only count in Your games: they can be your personal best on their board, but are never ranked. Entries that don't check out are skipped.
  */
 export async function importBests(req: Request, env: Env): Promise<Response> {
   const user = await requireUser(req, env);
@@ -35,8 +35,8 @@ export async function importBests(req: Request, env: Env): Promise<Response> {
     inserts.push(
       env.DB.prepare(
         `INSERT OR IGNORE INTO games (id, user_id, claim_hash, ip_hash, config, mode, scope_key, board, seed, started_at, finished_at, found, total, hints, ms, end_reason, ranked, unranked_reason, log)
-         VALUES (?, ?, NULL, 'import', ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, 0, 'imported', NULL)`,
-      ).bind(id, user.id, JSON.stringify(config), config.mode, scope, at - ms, at, found, total, hints, ms, found === total ? 'complete' : 'gaveUp'),
+         VALUES (?, ?, NULL, 'import', ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, 'imported', NULL)`,
+      ).bind(id, user.id, JSON.stringify(config), config.mode, scope, boardFor(config), at - ms, at, found, total, hints, ms, found === total ? 'complete' : 'gaveUp'),
     );
   }
   // Each row is a D1 write, so an account can only ever import so many.

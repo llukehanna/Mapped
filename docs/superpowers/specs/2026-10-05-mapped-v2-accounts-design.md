@@ -49,7 +49,7 @@ Players can sign in with Google. Signed-in players' games are saved, and complet
 - A 401 on a signed-in call signs the browser out locally. The name card opens by itself once per browser session.
 - Games played signed out stay claimable for 90 days, not one day. The browser keeps their claim tokens in localStorage (at most 500, oldest dropped), and the server keeps unclaimed finished games for 90 days. Unfinished games are still deleted after a day. Signing in on the same browser claims them all.
 - Claims saved by the first version in sessionStorage are moved to localStorage on the next load.
-- Local bests are no longer left behind. The first time an account signs in on a browser, the bests saved there before accounts existed (before the v2 launch) are sent to POST /api/me/import, 25 at a time. They show in Your games as "Unranked: played before accounts". They are unverified, so they never go on a board or become a best. Repeats are ignored. An account can import at most 200 games, and the browser remembers which accounts it has imported for as a hash of the email.
+- Local bests are no longer left behind. The first time an account signs in on a browser, the bests saved there before accounts existed (before the v2 launch) are sent to POST /api/me/import, 25 at a time. They show in Your games as "Unranked: played before accounts". They are unverified, so they are never ranked: they can be your personal best in Your games (see below) but never reach a leaderboard. Repeats are ignored. An account can import at most 200 games, and the browser remembers which accounts it has imported for as a hash of the email.
 
 ## Architecture
 
@@ -148,7 +148,7 @@ All bodies are JSON. Every non-GET request must carry `Content-Type: application
 | `POST /api/games/:id/finish` | `{ log }` | `{ found, total, hints, ms, endReason, ranked, reason?, rank?, newBest?, wouldRank? }` |
 | `POST /api/games/claim` | `{ claims: [{ id, claim }] }` | The same result shape per claimed game, now owned |
 | `GET /api/boards/:mode/:region` | — | `{ rows: top 50 [{ rank, name, hints, ms, finishedAt }], players, you?: row }` |
-| `GET /api/me/games` | — | `{ bests: [{ board, hints, ms, rank }], recent: last 50 games }` |
+| `GET /api/me/games` | — | `{ bests: [{ board, hints, ms, rank }], personal: [{ board, found, total, hints, ms, ranked }], recent: last 50 games }` |
 
 **Session cookie:** `__Host-mapped_session=<random 256-bit>; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`.
 
@@ -274,7 +274,7 @@ All new screens use the v1 tokens and glass styles and work in both themes. On p
   - Footer: "Fewest hints, then fastest. Complete, unpaused runs only." and the player count.
   - Changing a tab or chip updates the URL with `replaceState`.
 - **Your games** (`/me`, signed in only): the same card style.
-  - A 7×3 grid of your bests: time, hints and rank, with dashes where you haven't played.
+  - A 7×3 grid of your bests: time, hints and rank, with dashes where you haven't played. Revised: each cell is your personal best on that board, finished or not, imported runs included: most found, then a ranked run, then fewest hints, then fastest. Unfinished runs show found/total instead of a time; only ranked runs show a rank.
   - Then the last 50 games: date, setup, found/total, time, hints, and a Ranked tag (with rank and "new best") or the unranked reason.
 - **Delete account:** a confirm dialog like Give up, where you type your name to confirm.
 

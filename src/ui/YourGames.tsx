@@ -20,7 +20,9 @@ export function YourGames({ user, onBoard, onClose, onSignedOut }: { user: User;
       else setData('error');
     });
   }, []);
-  const bests = new Map(data && data !== 'error' ? data.bests.map((b) => [b.board, b]) : []);
+  const ok = data && data !== 'error' ? data : null;
+  const ranks = new Map(ok ? ok.bests.map((b) => [b.board, b.rank]) : []);
+  const personal = new Map(ok ? ok.personal.map((p) => [p.board, p]) : []);
 
   return (
     <CenterCard label="Your games" title="Your games" subtitle={user.name ?? 'No name yet: pick one to appear on the boards.'} wide onClose={onClose}>
@@ -42,13 +44,14 @@ export function YourGames({ user, onBoard, onClose, onSignedOut }: { user: User;
                   <span className="mute">{regionLabel(r)}</span>
                   {BOARD_MODES.map((m) => {
                     const board: Board = `${m}:${r}`;
-                    const b = bests.get(board);
+                    const b = personal.get(board);
+                    const rank = b?.ranked ? ranks.get(board) : null;
                     return b ? (
                       <button key={m} type="button" className="best-cell" onClick={() => onBoard(board)}>
                         <span>
-                          <b className="mono">{formatClock(b.ms)}</b> <span className="mute">· {hintsText(b.hints)}</span>
+                          <b className="mono">{b.found === b.total ? formatClock(b.ms) : `${b.found}/${b.total}`}</b> <span className="mute">· {hintsText(b.hints)}</span>
                         </span>
-                        {b.rank && <span className="gold mono">#{b.rank}</span>}
+                        {rank && <span className="gold mono">#{rank}</span>}
                       </button>
                     ) : (
                       <span key={m} className="best-cell none" aria-label="No run yet">
