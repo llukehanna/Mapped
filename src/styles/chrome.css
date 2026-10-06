@@ -96,3 +96,11 @@ kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--mute); bord
 
 .loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 14px; pointer-events: none; }
 .show-sm { display: none !important; }
+
+/* Hint card: the clues revealed so far for the hinted country, above the input. */
+.hint-card { width: 100%; padding: 10px 14px 12px; background: var(--panel-bg); animation: toast-in 240ms var(--ease); }
+.hint-head { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.hint-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13.5px; color: var(--mute); }
+.hint-list li.newest { color: var(--ink); font-weight: 500; }
+.hint-list li.newest::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: middle; }
+.hint-more { font-size: 11.5px; margin-top: 8px; }

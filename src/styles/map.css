@@ -16,6 +16,7 @@
 .shape.missed { fill: url(#missed-hatch); }
 .shape.off { fill: var(--off); stroke: var(--border-off); pointer-events: none; }
 .shape.territory { fill: var(--territory); stroke: var(--border-off); pointer-events: none; }
+.shape.dep { pointer-events: none; }
 .map.locating .shape.todo:hover, .map.locating .shape.found:hover { fill: var(--land-hover); }
 .map.reviewing .shape.missed:hover { stroke: var(--ink); stroke-width: 1.4; }
 

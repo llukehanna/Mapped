@@ -18,6 +18,15 @@ export function Score({ found, total }: { found: number; total: number }) {
   );
 }
 
+export function ThemeToggle({ theme, onToggle }: { theme: 'dark' | 'light'; onToggle: () => void }) {
+  const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  return (
+    <button type="button" className="iconbtn" onClick={onToggle} aria-label={label} title={label}>
+      <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
+    </button>
+  );
+}
+
 /** Opens the central "Give up?" dialog; it never ends the game by itself. */
 export function GiveUpButton({ onGiveUp }: { onGiveUp: () => void }) {
   return (
@@ -35,6 +44,8 @@ interface TopBarProps {
   clock: string;
   clockLevel: '' | 'warn' | 'crit';
   paused: boolean;
+  theme: 'dark' | 'light';
+  onTheme: () => void;
   onHint: () => void;
   onPause: () => void;
   onGiveUp: () => void;
@@ -65,6 +76,7 @@ export function TopBar(p: TopBarProps) {
           <kbd>Esc</kbd>
         </button>
         <GiveUpButton onGiveUp={p.onGiveUp} />
+        <ThemeToggle theme={p.theme} onToggle={p.onTheme} />
       </div>
       <button type="button" className="tb-btn show-sm" onClick={p.onMenu} aria-label="Menu">
         <Icon name="menu" />

@@ -36,4 +36,19 @@ describe('generated map data', () => {
   it('stays within the size budget', () => {
     expect(statSync(TOPO_URL).size).toBeLessThan(800 * 1024);
   });
+
+  it('records land neighbors both ways, from the main landmass only', () => {
+    expect(GEO_META.CHN.neighbors).toEqual(expect.arrayContaining(['MNG', 'RUS', 'IND', 'VNM']));
+    expect(GEO_META.FRA.neighbors).toEqual(expect.arrayContaining(['ESP', 'DEU', 'BEL']));
+    expect(GEO_META.FRA.neighbors).not.toContain('BRA'); // via French Guiana
+    expect(GEO_META.VAT.neighbors).toEqual(['ITA']);
+    for (const c of COUNTRIES) for (const n of GEO_META[c.id].neighbors) expect(GEO_META[n].neighbors, `${c.id}↔${n}`).toContain(c.id);
+  });
+
+  it('gives island nations their two nearest countries instead', () => {
+    expect(GEO_META.JPN.neighbors).toEqual([]);
+    expect(GEO_META.JPN.nearest).toHaveLength(2);
+    expect(GEO_META.ISL.nearest).toBeDefined();
+    expect(GEO_META.CHN.nearest).toBeUndefined();
+  });
 });

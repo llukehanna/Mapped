@@ -2,9 +2,9 @@
 // (Natural Earth 1:50m). Run with `npm run geo`. Outputs are committed.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { geoArea, geoCentroid, geoPath } from 'd3-geo';
+import { geoArea, geoCentroid, geoDistance, geoPath } from 'd3-geo';
 import { geoPatterson } from 'd3-geo-projection';
-import { feature, merge } from 'topojson-client';
+import { feature, merge, neighbors } from 'topojson-client';
 import { topology } from 'topojson-server';
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 import { COUNTRIES } from '../src/data/countries.ts';
@@ -18,6 +18,8 @@ const MERGE_INTO: Record<string, string> = { Somaliland: 'Somalia', 'N. Cyprus':
 const DROP = new Set(['Antarctica']);
 // Countries with no polygon at 1:50m: marker position only.
 const FALLBACK_ANCHOR: Record<string, [number, number]> = { TUV: [179.2, -8.52] };
+// Land borders that exist only through an overseas part: not what a player means by "borders".
+const NOT_NEIGHBORS = [['FRA', 'BRA'], ['FRA', 'SUR']];
 // Grid resolution for the delta-encoded output coordinates. Every 1:50m point is kept: coastlines stay
 // smooth when zoomed in, for about 680 KB (230 KB gzipped).
 const QUANTIZE = 1e5;
@@ -64,7 +66,8 @@ writeFileSync(OUT_TOPO, JSON.stringify(topo));
 const simplified = (feature(topo, topo.objects.countries) as unknown as FeatureCollection<Polygon | MultiPolygon>).features;
 const proj = geoPatterson().fitWidth(1280, { type: 'Sphere' });
 const path = geoPath(proj);
-const meta: Record<string, { anchor: [number, number]; tiny: boolean }> = {};
+type Meta = { anchor: [number, number]; tiny: boolean; neighbors: string[]; nearest?: string[] };
+const meta: Record<string, Meta> = {};
 for (const f of simplified) {
   const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
   const largest = polys
@@ -73,10 +76,28 @@ for (const f of simplified) {
   const [[x0, y0], [x1, y1]] = path.bounds(largest);
   const round = (n: number) => Math.round(n * 100) / 100;
   const [lon, lat] = geoCentroid(largest);
-  meta[f.id as string] = { anchor: [round(lon), round(lat)], tiny: Math.max(x1 - x0, y1 - y0) < TINY_PX };
+  meta[f.id as string] = { anchor: [round(lon), round(lat)], tiny: Math.max(x1 - x0, y1 - y0) < TINY_PX, neighbors: [] };
   if (!isFinite(x0) || x1 - x0 <= 0) throw new Error(`${f.id} has no area after quantization`);
 }
-for (const [id, anchor] of Object.entries(FALLBACK_ANCHOR)) meta[id] = { anchor, tiny: true };
+for (const [id, anchor] of Object.entries(FALLBACK_ANCHOR)) meta[id] = { anchor, tiny: true, neighbors: [] };
+
+// Hints: land neighbors from shared borders, and the two nearest countries for island nations.
+const countryIds = new Set(COUNTRIES.map((c) => c.id));
+const blocked = new Set(NOT_NEIGHBORS.flatMap(([a, b]) => [`${a}|${b}`, `${b}|${a}`]));
+const geometries = topo.objects.countries.geometries;
+neighbors(geometries).forEach((list, i) => {
+  const id = geometries[i].id;
+  if (!countryIds.has(id)) return;
+  meta[id].neighbors = list.map((j) => geometries[j].id).filter((n: string) => countryIds.has(n) && !blocked.has(`${id}|${n}`)).sort();
+});
+for (const c of COUNTRIES) {
+  if (meta[c.id].neighbors.length) continue;
+  meta[c.id].nearest = COUNTRIES.filter((o) => o.id !== c.id)
+    .map((o) => ({ id: o.id, d: geoDistance(meta[c.id].anchor, meta[o.id].anchor) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 2)
+    .map((o) => o.id);
+}
 writeFileSync(OUT_META, JSON.stringify(meta, null, 0) + '\n');
 
 const bytes = Buffer.byteLength(JSON.stringify(topo));

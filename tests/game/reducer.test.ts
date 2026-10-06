@@ -85,7 +85,7 @@ describe('timer', () => {
 });
 
 describe('hints in type mode', () => {
-  it('first hint picks an unfound country at level 1, second escalates it to level 2', () => {
+  it('first hint picks an unfound country at level 1; more hints climb its ladder', () => {
     let s = reduce(start(), { type: 'found', id: 'ARG', now: 2000 });
     s = reduce(s, { type: 'hint', rand: 0.99 });
     expect(s.hint).toEqual({ id: 'CHL', level: 1 });
@@ -94,11 +94,13 @@ describe('hints in type mode', () => {
     expect(s.hintsUsed).toBe(2);
   });
 
-  it('a third hint moves on to a new country', () => {
+  it('after the top rung, the next hint moves on to a new country', () => {
     let s = start();
-    for (let i = 0; i < 3; i++) s = reduce(s, { type: 'hint', rand: 0 });
-    expect(s.hint).toEqual({ id: 'ARG', level: 1 });
-    expect(s.hintsUsed).toBe(3);
+    for (let i = 0; i < 6; i++) s = reduce(s, { type: 'hint', rand: 0 });
+    expect(s.hint).toEqual({ id: 'ARG', level: 6 });
+    s = reduce(s, { type: 'hint', rand: 0.99 });
+    expect(s.hint).toEqual({ id: 'CHL', level: 1 });
+    expect(s.hintsUsed).toBe(7);
   });
 
   it('finding the hinted country clears the hint', () => {
@@ -153,13 +155,12 @@ describe('locate mode', () => {
     expect(s.missed.sort()).toEqual(['BRA', 'CHL']);
   });
 
-  it('hints target the current country and stop at level 2', () => {
+  it('hints target the current country and stop at the top rung (3 in locate)', () => {
     let s = reduce(locate(), { type: 'hint', rand: 0.5 });
     expect(s.hint).toEqual({ id: 'CHL', level: 1 });
-    s = reduce(s, { type: 'hint', rand: 0.5 });
-    s = reduce(s, { type: 'hint', rand: 0.5 });
-    expect(s.hint).toEqual({ id: 'CHL', level: 2 });
-    expect(s.hintsUsed).toBe(2);
+    for (let i = 0; i < 4; i++) s = reduce(s, { type: 'hint', rand: 0.5 });
+    expect(s.hint).toEqual({ id: 'CHL', level: 3 });
+    expect(s.hintsUsed).toBe(3);
   });
 });
 

@@ -13,6 +13,7 @@ export interface TerritoryDef {
   id: string;           // 't-' + slug
   name: string;
   note: string;         // shown when someone types it, e.g. "Territory of Denmark"
+  sovereign: string | null; // country id whose map color it shares (Greenland → DNK); null = neutral
   aliases: string[];
   geo: string | null;   // feature name in countries-50m; null = name-only note, no shape
 }

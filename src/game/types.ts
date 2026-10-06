@@ -22,7 +22,7 @@ export type GameEvent =
   | { kind: 'found'; id: string; corrected?: boolean } // corrected: accepted despite a typo
   | { kind: 'wrong'; id: string } // locate: clicked the wrong country
   | { kind: 'revealed'; id: string } // locate/identify: target given away (skip or out of tries)
-  | { kind: 'hint'; id: string; level: 1 | 2 };
+  | { kind: 'hint'; id: string; level: number };
 
 export interface GameState {
   config: GameConfig;
@@ -35,7 +35,8 @@ export interface GameState {
   found: string[];
   missed: string[];
   hintsUsed: number;
-  hint: { id: string; level: 1 | 2 } | null;
+  /** the country being hinted and how far up its ladder (1-based) */
+  hint: { id: string; level: number } | null;
   /** locate: wrong clicks left on the current target */
   triesLeft: number;
   /** active play time banked before the current run */
