@@ -90,7 +90,7 @@ export async function finishGame(req: Request, env: Env, id: string): Promise<Re
   const config = JSON.parse(game.config) as GameConfig;
   const verdict = log && judge({ config, seed: game.seed, log, board: game.board, serverElapsedMs: receivedAt - game.started_at });
   if (!verdict) {
-    await env.DB.prepare('DELETE FROM games WHERE id = ?').bind(id).run();
+    await env.DB.prepare('DELETE FROM games WHERE id = ? AND finished_at IS NULL').bind(id).run();
     throw new HttpError(422, 'unverified', "This game couldn't be verified.");
   }
   // Everything checks out but nobody owns it yet: it ranks once claimed.
@@ -107,9 +107,9 @@ export async function finishGame(req: Request, env: Env, id: string): Promise<Re
     unranked_reason: reason,
   };
   const saved = await env.DB.prepare(
-    'UPDATE games SET finished_at = ?, found = ?, total = ?, hints = ?, ms = ?, end_reason = ?, ranked = ?, unranked_reason = ?, log = ? WHERE id = ? AND finished_at IS NULL',
+    'UPDATE games SET finished_at = ?, found = ?, total = ?, hints = ?, ms = ?, end_reason = ?, ranked = ?, unranked_reason = ?, log = ? WHERE id = ? AND finished_at IS NULL AND user_id IS ?',
   )
-    .bind(receivedAt, done.found, done.total, done.hints, done.ms, done.end_reason, done.ranked, reason, JSON.stringify(log), id)
+    .bind(receivedAt, done.found, done.total, done.hints, done.ms, done.end_reason, done.ranked, reason, JSON.stringify(log), id, game.user_id)
     .run();
   if (saved.meta.changes === 0) throw new HttpError(409, 'finished', 'That game was already saved.');
   return json(await result(env, done));
@@ -127,9 +127,10 @@ export async function claimGames(req: Request, env: Env): Promise<Response> {
     if (!game || game.claim_hash !== (await hmac(env.AUTH_SECRET, `claim:${c.claim}`))) continue;
     const ranked = game.unranked_reason === 'anonymous';
     const owned: GameRow = { ...game, user_id: user.id, claim_hash: null, ranked: ranked ? 1 : game.ranked, unranked_reason: ranked ? null : game.unranked_reason };
-    await env.DB.prepare('UPDATE games SET user_id = ?, claim_hash = NULL, ranked = ?, unranked_reason = ? WHERE id = ? AND user_id IS NULL')
+    const claimed = await env.DB.prepare('UPDATE games SET user_id = ?, claim_hash = NULL, ranked = ?, unranked_reason = ? WHERE id = ? AND user_id IS NULL')
       .bind(user.id, owned.ranked, owned.unranked_reason, game.id)
       .run();
+    if (claimed.meta.changes === 0) continue;
     if (owned.finished_at !== null) results.push(await result(env, owned));
   }
   return json({ results });
