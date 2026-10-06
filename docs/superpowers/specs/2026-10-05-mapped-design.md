@@ -31,7 +31,8 @@ Matches Solitaire.
 - **d3-geo**, **d3-zoom** and **topojson-client** for the map, rendered as React-owned SVG
 - **Geist / Geist Mono** via `@fontsource-variable`
 - **Vitest** for unit tests and **Playwright** for end-to-end tests
-- **world-atlas**, **topojson-server** and **topojson-simplify** (dev dependencies) for the build-time geometry pipeline
+- **d3-geo-projection** for the Patterson projection
+- **world-atlas** and **topojson-server** (dev dependencies) for the build-time geometry pipeline
 - Node 24+
 
 ## Hosting and free-plan compliance
@@ -41,7 +42,7 @@ The production build is a static `dist/` folder: HTML, JS, CSS and one geometry 
 | Constraint | Cloudflare Workers (free) | Vercel Hobby (free) | Mapped |
 | --- | --- | --- | --- |
 | Compute | Static asset requests are free and unlimited, and don't count toward the 100k/day Worker request limit, as long as no Worker script runs | Functions not used | No Worker script, no functions |
-| File size | 25 MiB per asset | Fine | Largest file is the geometry, budgeted at ≤ 600 KB uncompressed |
+| File size | 25 MiB per asset | Fine | Largest file is the geometry, budgeted at ≤ 800 KB uncompressed (678 KB actual) |
 | File count | 20,000 per deployment | Fine | Fewer than 30 files |
 | Bandwidth | No cap on static assets | 100 GB/month | Budgeted at ≤ 1.2 MB per first visit uncompressed (well under 400 KB gzipped) |
 | Builds | Local `wrangler deploy` | 45 min max | Under 1 minute |
@@ -99,12 +100,12 @@ Territories such as Greenland, Western Sahara, Puerto Rico, French Guiana, New C
 
 ### Geometry pipeline
 
-`scripts/build-geo.ts` takes Natural Earth admin-0 at 1:50m (public domain, via the `world-atlas` package) and produces `src/data/world.topo.json` and `src/data/geo-meta.json` using topojson-server and topojson-simplify. The steps:
+`scripts/build-geo.ts` takes Natural Earth admin-0 at 1:50m (public domain, via the `world-atlas` package) and produces `src/data/world.topo.json` and `src/data/geo-meta.json` using topojson-server. The steps:
 
 1. Map every feature to a country or a territory by its Natural Earth name. Any feature that isn't accounted for fails the build.
 2. Merge Somaliland into Somalia, Northern Cyprus into Cyprus, and the Siachen Glacier into India. Drop Antarctica.
 3. Sort shapes largest first, so enclaves (Vatican City, San Marino, Lesotho) draw on top and receive clicks.
-4. Pin every point of shapes smaller than about 12,000 km² so microstates survive simplification. Keep 50% of the remaining points and quantize at 1e5. The output is 402 KB, or 145 KB gzipped.
+4. Keep every point of the 1:50m outlines (no simplification), so coastlines stay smooth when zoomed in, and quantize at 1e5. The output is 678 KB, or about 230 KB gzipped.
 5. Write `geo-meta.json`: an anchor (centroid of the largest polygon) for each id, and a `tiny` flag when the largest landmass is under 9 px across on a 1280 px world map. 51 countries are tiny. Tuvalu has no polygon at 1:50m, so it gets a fixed anchor and a marker only.
 
 Both generated files are committed, so `npm run build` doesn't need the pipeline.
@@ -303,6 +304,7 @@ The tokens come from Solitaire's "studio" theme.
 | mute | `#a39d93` |
 | accent | `#f2c14e` |
 | unfound land | `#3a332c` |
+| borders | a slightly lighter tone of each fill: `#554b40` unfound, `#a88a54` found, `#2a2622` dimmed |
 | found land | `#8a6f3e` |
 | just found | `#f2c14e` with a glow |
 | missed | `#d9654f` |
@@ -317,7 +319,8 @@ The guiding idea: countries still to find are the lighter tone, found ones reced
 | --- | --- |
 | page | `#f6f3ec` to `#ebe6dc` |
 | ocean | `#dfe6e6` |
-| unfound land | `#f7f4ee` with `#b9b1a3` borders |
+| unfound land | `#f7f4ee` |
+| borders | a slightly darker tone of each fill: `#cfc7b8` unfound, `#4a574e` found, `#d3cdc1` dimmed |
 | found land | `#2f3a33` |
 | just found and accent | `#7a5a00` |
 | missed | `#b5432f` |
@@ -358,7 +361,8 @@ Behind the card, the map previews the selection live: selected regions are highl
 
 ### The map (`src/map/`)
 
-- **Projection:** a single Equal Earth projection fits the whole world to the viewport. Every scope frame is a d3-zoom transform onto the in-scope features, inside the chrome's safe area, so changing scope is just an animated zoom.
+- **Projection:** Patterson, a cylindrical compromise: rectangular and edge to edge like Mercator, without its blown-up far north. There's no globe outline; the ocean fills the whole viewport. Maps are centered on 10°E so the edge falls at 170°W and Samoa, Tonga and Fiji stay together. The world view frames the land band (56°S to 83°N) across the full width, overscanned by 4%.
+- A single projection fits the whole world to the viewport. Every scope frame is a d3-zoom transform onto the in-scope features, inside the chrome's safe area, so changing scope is just an animated zoom.
   - The safe area excludes the top bar on every screen, plus the setup card's width on the setup screen and the review panel's width on the review screen.
   - Each country frames only its polygons within 30° of its main landmass, so France frames without French Guiana. Russia frames as European Russia.
   - For an Oceania-only scope the projection rotates to center around 160°E, so it doesn't split across the antimeridian.
@@ -439,7 +443,7 @@ wrangler.jsonc, vercel.json
 ## Risks and open items
 
 - **Natural Earth disputed borders:** Kashmir, Western Sahara, Crimea and others. Use Natural Earth's default "de facto" view and accept it; the territories list covers the guessable side.
-- **Geometry size vs. tiny-island fidelity:** resolved. The 1:50m data at 402 KB keeps every island; microstates are pinned during simplification.
+- **Geometry size vs. tiny-island fidelity:** resolved. Full 1:50m detail at 678 KB keeps every island and coastline.
 - **Markers at world view on a phone** are dense. Revisit during design iteration.
 - **French Guiana** is part of France's shape, so it fills in when France is found. That's correct (Sporcle does the same) but may surprise players.
 - **The prefix-hold delay (600 ms)** needs tuning in playtesting.
@@ -456,3 +460,4 @@ The whole app was prototyped and tested before the implementation plan was writt
 - **Framing:** a single projection, with zoom transforms for all framing. Russia and far-flung territories are handled as described in the map section.
 - **Identify mode:** wrong answers aren't counted, and the review list shows missed countries only.
 - **Setup:** Enter always starts the game. Space still toggles a focused chip.
+- **Map feel (design checkpoint):** Equal Earth with a globe outline felt off and too far out. Two rounds of side-by-side comparisons chose Patterson, edge to edge, framed tighter, with full-detail outlines and soft borders (a tone of each country's own fill instead of ocean-colored seams).

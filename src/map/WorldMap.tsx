@@ -5,7 +5,7 @@ import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } f
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import { GEO_META } from '../data/geoMeta.ts';
 import type { ShapeState } from '../ui/shapeStates.ts';
-import { baseProjection, fitTransform, frameBounds, type Bounds, type MapShape, type Rect } from './geometry.ts';
+import { baseProjection, fitTransform, frameBounds, WORLD_OVERSCAN, type Bounds, type MapShape, type Rect } from './geometry.ts';
 
 export type HighlightKind = 'hint' | 'target' | 'wrong' | 'reveal' | 'hover';
 
@@ -100,7 +100,7 @@ export function WorldMap(props: WorldMapProps) {
 
   const frameKey = frame === 'world' ? 'world' : [...frame].sort().join(',');
   const target = useMemo(
-    () => fitTransform(frameBounds(projection, shapes, frame, GEO_META), safe, 12),
+    () => fitTransform(frameBounds(projection, shapes, frame, GEO_META), safe, 12, frame === 'world' ? WORLD_OVERSCAN : undefined),
     [projection, shapes, frameKey, safe.x, safe.y, safe.width, safe.height],
   );
 
@@ -214,8 +214,9 @@ export function WorldMap(props: WorldMapProps) {
           <line className="hatch-line" x1="0" y1="0" x2="0" y2="5" />
         </pattern>
       </defs>
+      {/* Ocean fills the whole viewport: the map runs edge to edge with no globe outline. */}
+      <rect className="ocean" width={width} height={height} />
       <g ref={gRef}>
-        <path className="sphere" d={path({ type: 'Sphere' }) ?? ''} />
         <path className="grat" d={path(GRATICULE) ?? ''} />
         <ShapeLayer shapes={shapes} paths={paths} states={states} />
         {highlights.map((h) =>

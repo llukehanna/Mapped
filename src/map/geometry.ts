@@ -1,4 +1,5 @@
-import { geoArea, geoCentroid, geoDistance, geoEqualEarth, geoPath, type GeoProjection } from 'd3-geo';
+import { geoArea, geoCentroid, geoDistance, geoPath, type GeoProjection } from 'd3-geo';
+import { geoPatterson } from 'd3-geo-projection';
 import { zoomIdentity, type ZoomTransform } from 'd3-zoom';
 import type { Feature, MultiPolygon, Polygon, Position } from 'geojson';
 
@@ -37,10 +38,19 @@ export function prepareShapes(features: Feature<Polygon | MultiPolygon>[]): MapS
   });
 }
 
-/** The whole world fitted to the viewport. Zoom transforms do all further framing. */
+/** Land runs from about 56°S (Cape Horn) to 83°N (northern Greenland); the world view frames this band. */
+const LAND_SOUTH = -56;
+const LAND_NORTH = 83;
+/** The world view overscans a little: the outermost few % at the left and right edges are open ocean. */
+export const WORLD_OVERSCAN = 1.04;
+
+/**
+ * The whole world fitted to the viewport, in Patterson: a cylindrical compromise that keeps the map
+ * rectangular and edge to edge like Mercator without blowing up the far north. Zoom transforms do all framing.
+ */
 export function baseProjection(width: number, height: number, rotate: number): GeoProjection {
   const pad = 12;
-  return geoEqualEarth()
+  return geoPatterson()
     .rotate([rotate, 0])
     .fitExtent([[pad, pad], [Math.max(pad + 1, width - pad), Math.max(pad + 1, height - pad)]], { type: 'Sphere' });
 }
@@ -53,7 +63,7 @@ export function frameBounds(
   anchors: Readonly<Record<string, { anchor: [number, number] }>>,
 ): Bounds {
   const path = geoPath(projection);
-  if (ids === 'world') return path.bounds({ type: 'Sphere' }) as Bounds;
+  if (ids === 'world') return worldBounds(projection);
   let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
   const extend = ([[a, b], [c, d]]: Bounds) => {
     [x0, y0, x1, y1] = [Math.min(x0, a), Math.min(y0, b), Math.max(x1, c), Math.max(y1, d)];
@@ -70,19 +80,34 @@ export function frameBounds(
     const p = drawn.has(id) ? null : projection(anchors[id]?.anchor ?? [0, 0]);
     if (p) extend([p, p] as Bounds);
   }
-  return Number.isFinite(x0) ? [[x0, y0], [x1, y1]] : (path.bounds({ type: 'Sphere' }) as Bounds);
+  return Number.isFinite(x0) ? [[x0, y0], [x1, y1]] : worldBounds(projection);
 }
 
-/** Zoom transform that centers `bounds` inside `safe`, with a little margin, no closer than `maxK`. */
-export function fitTransform([[x0, y0], [x1, y1]]: Bounds, safe: Rect, maxK = 12): ZoomTransform {
-  const k = Math.min(maxK, 0.92 * Math.min(safe.width / Math.max(1, x1 - x0), safe.height / Math.max(1, y1 - y0)));
+/** The full width of the map, between the land's southern and northern limits. */
+function worldBounds(projection: GeoProjection): Bounds {
+  const [[x0], [x1]] = geoPath(projection).bounds({ type: 'Sphere' });
+  const center = -projection.rotate()[0];
+  const north = projection([center, LAND_NORTH])![1];
+  const south = projection([center, LAND_SOUTH])![1];
+  return [[x0, north], [x1, south]];
+}
+
+/**
+ * Zoom transform that centers `bounds` inside `safe`, no closer than `maxK`. `fill` below 1 leaves a margin;
+ * above 1 overscans (the world view uses WORLD_OVERSCAN).
+ */
+export function fitTransform([[x0, y0], [x1, y1]]: Bounds, safe: Rect, maxK = 12, fill = 0.92): ZoomTransform {
+  const k = Math.min(maxK, fill * Math.min(safe.width / Math.max(1, x1 - x0), safe.height / Math.max(1, y1 - y0)));
   return zoomIdentity
     .translate(safe.x + safe.width / 2 - (k * (x0 + x1)) / 2, safe.y + safe.height / 2 - (k * (y0 + y1)) / 2)
     .scale(k);
 }
 
-/** Pacific-only selections are centered on 160°E so island chains don't split at the map edge. */
+/**
+ * Maps are centered on 10°E, which puts the edge at 170°W so Samoa, Tonga and Fiji stay together on one side.
+ * Pacific-only selections are centered on 160°E so island chains don't split at the map edge.
+ */
 export function rotationFor(continents: Iterable<string>): number {
   const list = [...continents];
-  return list.length > 0 && list.every((c) => c === 'oceania') ? -160 : 0;
+  return list.length > 0 && list.every((c) => c === 'oceania') ? -160 : -10;
 }
