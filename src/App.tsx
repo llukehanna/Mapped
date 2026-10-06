@@ -245,13 +245,13 @@ export function App() {
       setRun(resume.run);
       setSave(resume.save);
     }
+    // Claims used to live in sessionStorage; they last 90 days in localStorage now. Moved on every load, signed in or not.
+    migrateClaims(session, storage, Date.now());
     if (!user) return;
     if (user.name === null && !readJson<boolean>(session, NAME_ASKED)) {
       writeJson(session, NAME_ASKED, true);
       setCard('name');
     }
-    // Claims used to live in sessionStorage; they last 90 days in localStorage now.
-    migrateClaims(session, storage, Date.now());
     const claims = readClaims(storage, Date.now());
     if (claims.length === 0) refreshBests();
     else void claimAll(claims, resume?.run?.id);
