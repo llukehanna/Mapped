@@ -46,3 +46,11 @@ export function scopeKey(scope: Scope): string {
   if (isWorld(scope)) return 'world';
   return [...[...scope.continents].sort(), ...[...scope.subregions].sort()].join(',');
 }
+
+/** The scope a `scopeKey` came from (continent ids and subregion names never collide). */
+export function scopeFromKey(key: string): Scope {
+  if (key === 'world') return WORLD;
+  const parts = key.split(',');
+  const isContinent = (p: string) => CONTINENTS.some((c) => c.id === p);
+  return { continents: parts.filter(isContinent) as Continent[], subregions: parts.filter((p) => !isContinent(p)) };
+}
