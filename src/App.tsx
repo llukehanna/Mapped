@@ -22,6 +22,7 @@ import { useShapes } from './map/useShapes.ts';
 import { WorldMap, type Highlight, type MapHandle } from './map/WorldMap.tsx';
 import { buildIndex } from './match/nameIndex.ts';
 import { localBests, readBest, recordResult } from './store/bests.ts';
+import { emailKey, hasImported, markImported } from './store/imported.ts';
 import { readJson, safeStorage, writeJson } from './store/storage.ts';
 import { readTheme, writeTheme, type Theme } from './store/theme.ts';
 import { GuessInput } from './ui/GuessInput.tsx';
@@ -59,8 +60,6 @@ const FINISH_RETRY_MS = 800;
 const session = sessionStore();
 /** The name card opens by itself once per browser session; the user menu can open it any time. */
 const NAME_ASKED = 'mapped:name-asked:v1';
-/** Emails whose pre-accounts bests are already in their accounts (a JSON array in localStorage). */
-const IMPORTED = 'mapped:imported:v1';
 /** `?seed=42` makes target order reproducible (used by end-to-end tests). */
 const SEED = Number(new URLSearchParams(window.location.search).get('seed')) || null;
 const random = SEED ? seededRandom(SEED) : Math.random;
@@ -283,8 +282,13 @@ export function App() {
 
   /** Once per account on this browser: sends the bests saved before accounts to Your games (unranked). A failure other than 401 leaves it to retry next load. */
   async function importLocalBests(email: string) {
-    const done = readJson<string[]>(storage, IMPORTED) ?? [];
-    if (done.includes(email)) return;
+    let key: string;
+    try {
+      key = await emailKey(email);
+    } catch {
+      return; // no crypto.subtle (insecure context): skip, nothing is lost
+    }
+    if (hasImported(storage, key)) return;
     const results = localBests(storage)
       .filter((b) => b.result.at < LOCAL_IMPORT_BEFORE)
       .map(({ config, result }) => ({ config, ...result }));
@@ -294,7 +298,7 @@ export function App() {
       if ((e as ApiError).status === 401) setUser(null);
       return;
     }
-    writeJson(storage, IMPORTED, [...(readJson<string[]>(storage, IMPORTED) ?? []), email]);
+    markImported(storage, key);
   }
 
   /** Reloads your bests, and the rank on the save card (it changes once you pick a name). */
