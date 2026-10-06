@@ -74,3 +74,9 @@ export async function pickName(page: Page, name: string) {
   await card.getByRole('button', { name: 'Done' }).click();
   await expect(card).toBeHidden();
 }
+
+/** Signs in from the setup card with the fake Google account `asPlayer` set up; lands on the name card. */
+export async function signInFromSetup(page: Page) {
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Sign in' }).getByRole('button', { name: 'Sign in with Google' }).click();
+}
