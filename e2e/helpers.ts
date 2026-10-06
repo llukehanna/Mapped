@@ -49,3 +49,28 @@ export async function clickCountry(page: Page, id: string) {
   const { x, y } = (await point.jsonValue())!;
   await page.mouse.click(x, y);
 }
+
+/** A unique player for this test: fake sign-in uses the `mapped_fake_as` cookie as the Google account. */
+export async function asPlayer(page: Page) {
+  const tag = `${Date.now().toString(36).slice(-5)}${Math.floor(Math.random() * 1e4)}`;
+  const email = `p${tag}@example.com`;
+  await page.context().addCookies([{ name: 'mapped_fake_as', value: email, url: 'http://localhost:4173' }]);
+  return { email, name: `p${tag}` };
+}
+
+/** Types each name at a believable human pace, so the server ranks the run. */
+export async function typeLikeAPerson(page: Page, names: string[]) {
+  const input = page.getByLabel('Country name');
+  for (const name of names) {
+    await input.pressSequentially(name.toLowerCase(), { delay: 25 });
+    await page.waitForTimeout(250);
+  }
+}
+
+export async function pickName(page: Page, name: string) {
+  const card = page.getByRole('dialog', { name: 'Pick a name' });
+  await card.getByLabel('Display name').fill(name);
+  await expect(card.getByText('✓ Available')).toBeVisible();
+  await card.getByRole('button', { name: 'Done' }).click();
+  await expect(card).toBeHidden();
+}

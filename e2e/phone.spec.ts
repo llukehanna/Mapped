@@ -13,3 +13,16 @@ test('phone: setup sheet, play, menu', async ({ page }) => {
   expect(overflow).toBe(false);
   expect(errors).toEqual([]);
 });
+
+test('phone: the sign-in card is a bottom sheet', async ({ page }) => {
+  await page.goto('/signin');
+  const card = page.getByRole('dialog', { name: 'Sign in' });
+  await expect(card.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
+  // Once its slide-up animation settles, the sheet sits on the bottom edge.
+  await expect
+    .poll(async () => {
+      const box = (await card.boundingBox())!;
+      return Math.abs(box.y + box.height - page.viewportSize()!.height);
+    })
+    .toBeLessThan(2);
+});

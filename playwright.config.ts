@@ -5,8 +5,9 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: true,
   use: { baseURL: 'http://localhost:4173', trace: 'retain-on-failure' },
+  // The real Worker and a fresh local D1, with fake sign-in (localhost only).
   webServer: {
-    command: 'npm run build && npm run preview',
+    command: 'npm run build && npm run serve:e2e',
     port: 4173,
     reuseExistingServer: true,
     timeout: 180_000,
