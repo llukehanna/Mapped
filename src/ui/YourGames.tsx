@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api/client.ts';
+import { api, type ApiError } from '../api/client.ts';
 import type { MyGamesResponse, User } from '../api/types.ts';
 import { formatClock } from '../game/format.ts';
 import { BOARD_MODES, BOARD_REGIONS, regionLabel, type Board } from '../game/ranking.ts';
@@ -12,10 +12,13 @@ import { MODES } from './SetupCard.tsx';
 const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const modeLabel = (id: string) => MODES.find((m) => m.id === id)!.label;
 
-export function YourGames({ user, onBoard, onClose }: { user: User; onBoard: (board: Board) => void; onClose: () => void }) {
+export function YourGames({ user, onBoard, onClose, onSignedOut }: { user: User; onBoard: (board: Board) => void; onClose: () => void; onSignedOut: () => void }) {
   const [data, setData] = useState<MyGamesResponse | 'error' | null>(null);
   useEffect(() => {
-    api.myGames().then(setData, () => setData('error'));
+    api.myGames().then(setData, (e: ApiError) => {
+      if (e.status === 401) onSignedOut();
+      else setData('error');
+    });
   }, []);
   const bests = new Map(data && data !== 'error' ? data.bests.map((b) => [b.board, b]) : []);
 

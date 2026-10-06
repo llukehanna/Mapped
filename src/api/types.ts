@@ -3,6 +3,9 @@ import type { EndReason, Mode } from '../game/types.ts';
 
 /** Shared between the Worker and the browser: the JSON each API route sends back. */
 
+/** Most claims one /api/games/claim request handles (each costs several D1 queries). */
+export const MAX_CLAIMS_PER_REQUEST = 8;
+
 export type UnrankedReason = 'custom' | 'incomplete' | 'paused' | 'unverified' | 'anonymous';
 
 export interface User {

@@ -52,6 +52,14 @@ export function addClaim(storage: Storage | null, claim: { id: string; claim: st
   writeJson(storage, CLAIMS, [...readClaims(storage, now).filter((c) => c.id !== claim.id), { ...claim, at: now }]);
 }
 
+/** Drops the claims with these ids (the ones the server has taken), keeping the rest. */
+export function removeClaims(storage: Storage | null, ids: readonly string[]): void {
+  const drop = new Set(ids);
+  const keep = (readJson<Claim[]>(storage, CLAIMS) ?? []).filter((c) => !drop.has(c.id));
+  if (keep.length === 0) clearClaims(storage);
+  else writeJson(storage, CLAIMS, keep);
+}
+
 export function clearClaims(storage: Storage | null): void {
   try {
     storage?.removeItem(CLAIMS);
