@@ -24,6 +24,8 @@ export interface MapHandle {
   fit(): void;
   /** Zoom to one country, no closer than `maxK`. */
   focus(id: string, maxK?: number): void;
+  /** Zoom to frame several countries (e.g. a subregion), no closer than `maxK`. */
+  frameIds(ids: readonly string[], maxK?: number): void;
   /** Is the country inside the safe area, with its largest landmass at least `minPx` across? */
   isVisible(id: string, minPx: number): boolean;
 }
@@ -66,7 +68,10 @@ const ShapeLayer = memo(function ShapeLayer({
   paths: ReadonlyMap<string, string>;
   states: Readonly<Record<string, ShapeState>>;
 }) {
-  return shapes.map((s) => <path key={s.id} d={paths.get(s.id)} data-id={s.id} className={`shape ${states[s.id] ?? 'off'}`} />);
+  // Territories ("dep") share their owner's look but never take clicks or hovers of their own.
+  return shapes.map((s) => (
+    <path key={s.id} d={paths.get(s.id)} data-id={s.id} className={`shape ${states[s.id] ?? 'off'}${s.id.startsWith('t-') ? ' dep' : ''}`} />
+  ));
 });
 
 /** Stable pseudo-random offset so the locate area hint never sits exactly on the answer. */
@@ -159,6 +164,9 @@ export function WorldMap(props: WorldMapProps) {
     focus(id, maxK = 8) {
       const b = boundsOf(id);
       if (b) apply(fitTransform(b, safe, maxK), 650);
+    },
+    frameIds(ids, maxK = 8) {
+      apply(fitTransform(frameBounds(projection, shapes, new Set(ids), GEO_META), safe, maxK), 650);
     },
     isVisible(id, minPx) {
       const b = boundsOf(id);

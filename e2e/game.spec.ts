@@ -109,6 +109,39 @@ test('pause hides the map and Esc resumes', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Paused' })).toBeHidden();
 });
 
+test('hints climb a ladder of clues and zoom to the country', async ({ page }) => {
+  await openSetup(page);
+  await start(page);
+  const before = await page.locator('svg.map > g').first().getAttribute('transform');
+  const input = page.getByLabel('Country name');
+  await input.pressSequentially('?');
+  const card = page.getByRole('region', { name: 'Hints' });
+  await expect(card).toContainText('1/6');
+  await expect(card.locator('li')).toHaveCount(1);
+  await expect(input).toHaveValue('');
+  await expect.poll(async () => page.locator('svg.map > g').first().getAttribute('transform')).not.toBe(before);
+  await input.pressSequentially('?');
+  await expect(card.locator('li')).toHaveCount(2);
+  await expect(card.locator('li').nth(1)).toHaveText(/^(Borders|Nearest countries)/);
+});
+
+test('Greenland fills in with Denmark', async ({ page }) => {
+  await openSetup(page);
+  await start(page);
+  await page.getByLabel('Country name').pressSequentially('denmark');
+  await expect(page.locator('path.shape[data-id="t-greenland"]')).toHaveClass(/\b(just|found)\b/);
+});
+
+test('the theme toggle is always there, including mid-game and in review', async ({ page }) => {
+  await openSetup(page);
+  await start(page);
+  await page.locator('.topbar').getByRole('button', { name: 'Switch to light mode' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: 'Give up' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Give up' }).click();
+  await expect(page.locator('.review-bar').getByRole('button', { name: 'Switch to dark mode' })).toBeVisible();
+});
+
 test('light mode is remembered across reloads', async ({ page }) => {
   await openSetup(page);
   await page.getByRole('button', { name: 'Switch to light mode' }).click();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTRIES } from '../../src/data/countries.ts';
+import { FACTS, LANDLOCKED } from '../../src/data/facts.ts';
 import { TERRITORIES } from '../../src/data/territories.ts';
 
 describe('country data', () => {
@@ -50,5 +51,31 @@ describe('country data', () => {
     const ids = [...COUNTRIES, ...TERRITORIES].map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(TERRITORIES.every((t) => t.id.startsWith('t-') && t.note.length > 0)).toBe(true);
+  });
+
+  it('ties every shaped territory to a real country or leaves it neutral', () => {
+    const ids = new Set(COUNTRIES.map((c) => c.id));
+    for (const t of TERRITORIES) if (t.sovereign) expect(ids, t.name).toContain(t.sovereign);
+    expect(TERRITORIES.find((t) => t.name === 'Greenland')!.sovereign).toBe('DNK');
+    expect(TERRITORIES.find((t) => t.name === 'Western Sahara')!.sovereign).toBeNull();
+  });
+});
+
+describe('hint facts', () => {
+  it('has a capital, population and area for every country', () => {
+    for (const c of COUNTRIES) {
+      const f = FACTS.get(c.id);
+      expect(f, c.id).toBeDefined();
+      expect(f!.capital.length, c.id).toBeGreaterThan(1);
+      expect(f!.population, c.id).toBeGreaterThan(0);
+      expect(f!.areaKm2, c.id).toBeGreaterThan(0);
+    }
+    expect(FACTS.size).toBe(197);
+  });
+
+  it('lists the 45 landlocked countries, all real ids', () => {
+    const ids = new Set(COUNTRIES.map((c) => c.id));
+    expect(LANDLOCKED.size).toBe(45);
+    for (const id of LANDLOCKED) expect(ids, id).toContain(id);
   });
 });

@@ -62,7 +62,7 @@ export function useGuess({ state, dispatch, index, say, flash, onHint }: GuessOp
 
   function onChange(raw: string) {
     const next = raw.replace(/\?/g, '');
-    if (next !== raw) onHint();
+    for (let i = next.length; i < raw.length; i++) onHint();
     setValue(next);
     window.clearTimeout(hold.current);
     const s = latest.current;

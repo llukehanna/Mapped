@@ -462,3 +462,11 @@ The whole app was prototyped and tested before the implementation plan was writt
 - **Setup:** Enter always starts the game. Space still toggles a focused chip.
 - **Map feel (design checkpoint):** Equal Earth with a globe outline felt off and too far out. Two rounds of side-by-side comparisons chose Patterson, edge to edge, framed tighter, with full-detail outlines and soft borders (a tone of each country's own fill instead of ocean-colored seams).
 - **Analytics:** the CSP allows `static.cloudflareinsights.com` (script) and `cloudflareinsights.com` (connect), so the Cloudflare Web Analytics beacon the `lukeghanna.com` zone injects can run. It's the only third-party origin.
+- **Hint ladder (post-launch):** each `?` reveals the next clue about the same country, shown in a hint card above the input.
+  - Type and Identify have six rungs: where (landlocked / island nation / coastal, plus subregion), neighbors (computed from shared borders, or the two nearest countries for islands), size compared with familiar places plus population, capital, first letter, then half the letters.
+  - Locate has three rungs: where, neighbors, then a circle near it.
+  - In Type mode the first hint zooms to the country; in Locate it zooms to the subregion.
+  - Facts (capital, population, area, landlocked) live in `src/data/facts.ts`.
+- **Territories take their owner's color:** Greenland goes with Denmark, Puerto Rico with the US, and so on. They're found, glow and are missed together with that country, but are never clickable on their own. Western Sahara stays neutral.
+- **Give up:** a single central confirm dialog everywhere, which pauses the clock. Giving up works while paused. Paused blurs the map element itself rather than relying on `backdrop-filter`.
+- **Theme toggle:** shown on every screen: setup, the play top bar (in the menu on phones) and review.

@@ -4,7 +4,8 @@ import { GEO_META } from './data/geoMeta.ts';
 import { COUNTRY, nameOf } from './data/lookup.ts';
 import { TERRITORIES } from './data/territories.ts';
 import { formatClock, formatCountdown } from './game/format.ts';
-import { hintText } from './game/hints.ts';
+import { FACTS } from './data/facts.ts';
+import { clueText, HINT_LEVELS } from './game/hints.ts';
 import { groupOf, progressRows } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
@@ -27,12 +28,17 @@ import { ReviewPanel } from './ui/ReviewPanel.tsx';
 import { MODES, SetupCard } from './ui/SetupCard.tsx';
 import { shapeStates } from './ui/shapeStates.ts';
 import { Toast, type ToastMessage } from './ui/Toast.tsx';
-import { GiveUpButton, Score, TopBar, Wordmark } from './ui/TopBar.tsx';
+import { HintCard } from './ui/HintCard.tsx';
+import { GiveUpButton, Score, ThemeToggle, TopBar, Wordmark } from './ui/TopBar.tsx';
 import { useGuess } from './ui/useGuess.ts';
 import { ZoomControls } from './ui/ZoomControls.tsx';
 
 const DEFAULT_CONFIG: GameConfig = { mode: 'type', scope: WORLD, timeLimitSec: null };
 const INDEX = buildIndex(COUNTRIES, TERRITORIES);
+/** Territory shape → the country whose color it shares (Greenland → Denmark). */
+const OWNERS = new Map(TERRITORIES.flatMap((t) => (t.sovereign && t.geo ? [[t.id, t.sovereign] as const] : [])));
+const clue = (mode: GameConfig['mode'], level: number, id: string) =>
+  clueText(mode, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
 const storage = safeStorage();
 /** `?seed=42` makes target order reproducible (used by end-to-end tests). */
 const SEED = Number(new URLSearchParams(window.location.search).get('seed')) || null;
@@ -147,8 +153,14 @@ export function App() {
       setMapFlash({ id: e.id, kind: 'reveal', label: name, seq: e.seq });
       say(`That was ${name}`, 'warn');
     } else if (e.kind === 'hint') {
-      say(hintText(mode, e.level, COUNTRY.get(e.id)!), 'info');
-      if (mode === 'type' && e.level === 2) mapRef.current?.focus(e.id, 6);
+      setAnnouncement(`Hint: ${clue(mode, e.level, e.id)}`);
+      // Type: show the hinted country. Locate: show its region only, then close in for the circle.
+      if (mode === 'type' && e.level === 1) mapRef.current?.focus(e.id, 5);
+      if (mode === 'locate' && e.level === 1) {
+        const sub = COUNTRY.get(e.id)!.subregion;
+        mapRef.current?.frameIds(COUNTRIES.filter((c) => c.subregion === sub).map((c) => c.id), 6);
+      }
+      if (mode === 'locate' && e.level === 3) mapRef.current?.focus(e.id, 3);
     }
   }, [state.event?.seq]);
 
@@ -272,7 +284,7 @@ export function App() {
   const shapeList = Array.isArray(shapes) ? shapes : null;
   const allIds = useMemo(() => shapeList?.map((s) => s.id) ?? [], [shapeList]);
   const states = useMemo(
-    () => shapeStates(allIds, state.phase, pool, state.found, state.missed, justFound),
+    () => shapeStates(allIds, state.phase, pool, state.found, state.missed, justFound, OWNERS),
     [allIds, state.phase, pool, state.found, state.missed, justFound],
   );
   const markers = useMemo(() => pool.filter((id) => GEO_META[id]?.tiny), [pool]);
@@ -281,7 +293,11 @@ export function App() {
   if (goal && mode === 'identify' && state.phase === 'playing') highlights.push({ id: goal, kind: 'target' });
   if (mapFlash) highlights.push(mapFlash);
   if (hovered && state.phase === 'review') highlights.push({ id: hovered, kind: 'hover' });
-  const areaPulse = mode === 'locate' && state.hint?.level === 2 && state.phase === 'playing' ? state.hint.id : null;
+  const areaPulse = mode === 'locate' && (state.hint?.level ?? 0) >= 3 && state.phase === 'playing' ? state.hint!.id : null;
+  // Clues so far for the hinted country (Type: any missing country; Locate/Identify: the current target).
+  const hinted = state.hint && state.phase === 'playing' && (mode === 'type' || state.hint.id === goal) ? state.hint : null;
+  const clues = hinted ? Array.from({ length: hinted.level }, (_, i) => clue(mode, i + 1, hinted.id)) : [];
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
   const safe = safeArea(state.phase === 'paused' ? 'playing' : state.phase, small, size.width, size.height, keyboard);
 
   const clock = limitMs === null ? formatClock(spent) : formatCountdown(limitMs - spent);
@@ -324,14 +340,7 @@ export function App() {
         <>
           <div className="corner">
             <Wordmark />
-            <button
-              type="button"
-              className="iconbtn"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
-            </button>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
           <SetupCard config={draft} best={readBest(storage, draft)} onChange={setDraft} onStart={() => start()} />
         </>
@@ -346,6 +355,8 @@ export function App() {
             clock={clock}
             clockLevel={clockLevel}
             paused={state.phase === 'paused'}
+            theme={theme}
+            onTheme={toggleTheme}
             onHint={hint}
             onPause={togglePause}
             onGiveUp={askGiveUp}
@@ -353,6 +364,7 @@ export function App() {
           />
           <div className="dock">
             <Toast toast={toast} />
+            <HintCard clues={clues} levels={HINT_LEVELS[mode]} />
             {mode === 'locate' && goal ? (
               <LocatePrompt
                 targetId={goal}
@@ -398,6 +410,7 @@ export function App() {
                   <Icon name="pause" /> Pause
                 </button>
                 <GiveUpButton onGiveUp={askGiveUp} />
+                <ThemeToggle theme={theme} onToggle={toggleTheme} />
               </div>
               <div className="bars">
                 {rows.map((r) => (
@@ -429,6 +442,7 @@ export function App() {
             {state.hintsUsed > 0 && <span className="mute hide-sm">· {state.hintsUsed} hint{state.hintsUsed === 1 ? '' : 's'}</span>}
             {newBest && <span className="badge">New best</span>}
             <div className="tb-spacer" />
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <button type="button" className="btn hide-sm" onClick={() => dispatch({ type: 'toSetup' })}>
               Change setup
             </button>

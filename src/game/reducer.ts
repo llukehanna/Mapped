@@ -1,3 +1,4 @@
+import { HINT_LEVELS } from './hints.ts';
 import type { EndReason, GameAction, GameConfig, GameEvent, GameState } from './types.ts';
 
 export const TRIES_PER_TARGET = 3;
@@ -69,22 +70,27 @@ function reveal(state: GameState, id: string, now: number): GameState {
   return advance({ ...state, missed: [...state.missed, id], event: emit(state, { kind: 'revealed', id }) }, now);
 }
 
+/** Climbs the hint ladder for the current target (locate/identify) or for a missing country (type). */
 function giveHint(state: GameState, rand: number): GameState {
+  const top = HINT_LEVELS[state.config.mode];
+  const climb = (id: string, level: number): GameState => ({
+    ...state,
+    hint: { id, level },
+    hintsUsed: state.hintsUsed + 1,
+    event: emit(state, { kind: 'hint', id, level }),
+  });
   const goal = target(state);
   if (goal) {
-    if (state.hint?.id === goal && state.hint.level === 2) return state;
-    const level = state.hint?.id === goal ? 2 : 1;
-    return { ...state, hint: { id: goal, level }, hintsUsed: state.hintsUsed + 1, event: emit(state, { kind: 'hint', id: goal, level }) };
+    if (state.hint?.id !== goal) return climb(goal, 1);
+    return state.hint.level < top ? climb(goal, state.hint.level + 1) : state;
   }
-  if (state.hint && state.hint.level === 1) {
-    const hint = { id: state.hint.id, level: 2 as const };
-    return { ...state, hint, hintsUsed: state.hintsUsed + 1, event: emit(state, { kind: 'hint', ...hint }) };
-  }
+  // Type mode: keep climbing the same country; past the top rung, start over on a new one.
+  if (state.hint && state.hint.level < top) return climb(state.hint.id, state.hint.level + 1);
   const found = new Set(state.found);
-  const left = state.pool.filter((id) => !found.has(id));
+  const unfound = state.pool.filter((id) => !found.has(id));
+  const left = unfound.length > 1 ? unfound.filter((id) => id !== state.hint?.id) : unfound;
   if (!left.length) return state;
-  const id = left[Math.min(left.length - 1, Math.floor(rand * left.length))];
-  return { ...state, hint: { id, level: 1 }, hintsUsed: state.hintsUsed + 1, event: emit(state, { kind: 'hint', id, level: 1 }) };
+  return climb(left[Math.min(left.length - 1, Math.floor(rand * left.length))], 1);
 }
 
 export function reduce(state: GameState, action: GameAction): GameState {
