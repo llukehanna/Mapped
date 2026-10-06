@@ -32,6 +32,9 @@
 }
 .tb-btn:hover, .btn:hover { opacity: 1; background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .tb-btn.danger { color: var(--danger); opacity: 1; }
+.swap { display: inline-grid; }
+.swap > span { grid-area: 1 / 1; text-align: center; }
+.swap > [aria-hidden='true'] { visibility: hidden; }
 .btn { border: 1px solid var(--chrome-line); opacity: 1; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--ink)); }

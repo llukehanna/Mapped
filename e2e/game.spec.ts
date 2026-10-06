@@ -75,6 +75,19 @@ test('countdown: time running out ends the game', async ({ page }) => {
   await expect(page.getByText('Missed · 12')).toBeVisible();
 });
 
+test('give up confirms with a second click on the same spot', async ({ page }) => {
+  await openSetup(page);
+  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await start(page);
+  // Click near the left edge (the flag icon), where a person aims, not the center.
+  const box = (await page.getByRole('button', { name: 'Give up' }).boundingBox())!;
+  const spot = { x: box.x + 8, y: box.y + box.height / 2 };
+  await page.mouse.click(spot.x, spot.y);
+  await expect(page.getByRole('button', { name: 'Sure?' })).toBeVisible();
+  await page.mouse.click(spot.x, spot.y);
+  await expect(page.locator('.review-bar')).toBeVisible();
+});
+
 test('pause hides the map and Esc resumes', async ({ page }) => {
   await openSetup(page);
   await start(page);

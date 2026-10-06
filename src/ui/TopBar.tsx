@@ -19,7 +19,8 @@ export function Score({ found, total }: { found: number; total: number }) {
   );
 }
 
-/** "Give up" asks once more before ending the game. */
+/** "Give up" asks once more before ending the game. Both labels share one grid cell so the button never
+ * changes width: otherwise it slides out from under the cursor and the confirming click misses. */
 export function GiveUpButton({ onGiveUp }: { onGiveUp: () => void }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
@@ -30,7 +31,10 @@ export function GiveUpButton({ onGiveUp }: { onGiveUp: () => void }) {
   return (
     <button type="button" className={`tb-btn ${armed ? 'danger' : ''}`} onClick={() => (armed ? onGiveUp() : setArmed(true))}>
       <Icon name="flag" />
-      <span className="tb-label">{armed ? 'Sure?' : 'Give up'}</span>
+      <span className="tb-label swap">
+        <span aria-hidden={armed}>Give up</span>
+        <span aria-hidden={!armed}>Sure?</span>
+      </span>
     </button>
   );
 }
