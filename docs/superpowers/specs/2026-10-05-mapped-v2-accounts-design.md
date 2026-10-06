@@ -1,32 +1,32 @@
 # Mapped v2: accounts and leaderboards
 
 **Date:** 2026-10-05
-**Status:** Approved in brainstorming; awaiting spec review
+**Status:** Approved; sign-in switched from email codes to Google before planning
 **Builds on:** [v1 design](2026-10-05-mapped-design.md)
 **Mockups:** `.superpowers/brainstorm/39123-1791265063/content/accounts-screens.html` (local only)
 
-Players can sign in with an emailed code. Signed-in players' games are saved, and complete, unpaused runs on standard setups go on public leaderboards ranked by fewest hints, then fastest time. Playing still needs no account.
+Players can sign in with Google. Signed-in players' games are saved, and complete, unpaused runs on standard setups go on public leaderboards ranked by fewest hints, then fastest time. Playing still needs no account.
 
 ## Decisions
 
 | Question | Decision |
 | --- | --- |
-| Sign-in method | Email one-time code only. No passwords. |
+| Sign-in method | Google only (OpenID Connect, server-side redirect). No passwords, no email service. People without a Google account can play but not save. |
 | When an account is needed | Never to play. Finishing a game offers "Sign in to save this"; signing in then claims that game. |
 | Which setups rank | 21 boards: each mode (Type, Locate, Identify) × World or exactly one whole continent. Any time limit. |
 | Ranking | Fewest hints, then fastest time, then earliest finish. One best run per player per board. All-time only. |
 | Anti-cheat | The server times each game, picks the target order, and replays the action log through the shared reducer. |
-| Stack | One Cloudflare Worker for `/api/*`, D1 (SQLite), Resend for email. |
-| Display identity | A unique display name chosen once at first sign-in. Emails are never shown. |
+| Stack | One Cloudflare Worker for `/api/*`, and D1 (SQLite). |
+| Display identity | A unique display name chosen once at first sign-in. Google names and emails are never shown publicly. |
 | Local bests | Kept exactly as in v1, and not migrated into accounts. |
 | Layout | Sign-in, Leaderboards and Your games are centred cards over a dimmed map. The post-game save prompt is a card at bottom centre. |
 
 ## Non-goals
 
-- Passwords, OAuth, passkeys, changing your email
+- Passwords, emailed codes, Apple or other providers, passkeys
 - Weekly or monthly boards, friends, following, profiles of other players
 - An admin UI (moderation is `wrangler d1 execute` and a recompute script)
-- Bot detection beyond the replay check and speed floor (Turnstile is the fallback if sign-in abuse appears)
+- Bot detection beyond the replay check and speed floor
 - Vercel hosting (dropped; D1 is Cloudflare-only)
 
 ## Architecture
@@ -35,13 +35,13 @@ Players can sign in with an emailed code. Signed-in players' games are saved, an
 browser ──/assets, /, /leaderboards/…──▶ Workers static assets (no Worker runs)
         ──/api/*─────────────────────▶ Worker (worker/index.ts)
                                           ├─ D1 database  (binding DB)
-                                          ├─ Resend HTTP API (secret RESEND_API_KEY)
+                                          ├─ Google OAuth token endpoint (server-to-server)
                                           └─ src/game/*  (shared reducer, scope, rng)
 ```
 
 - `wrangler.jsonc` gains `main: "worker/index.ts"`, a `d1_databases` binding `DB`, and `assets.run_worker_first: ["/api/*"]`, so the Worker only ever runs for API calls. `assets.not_found_handling` changes from `404-page` to `single-page-application` so client routes load the app.
-- Secrets: `RESEND_API_KEY`, and `AUTH_SECRET`, an HMAC key for hashing login codes and session tokens.
-- Vars: `MAIL_MODE` (`resend` in production, `log` locally and in tests), `APP_ORIGIN`.
+- Secrets: `GOOGLE_CLIENT_SECRET`, and `AUTH_SECRET`, an HMAC key for hashing session tokens, claim tokens and IPs.
+- Vars: `GOOGLE_CLIENT_ID`, and `AUTH_MODE` (`google` in production, `fake` for local end-to-end tests).
 - Schema migrations live in `migrations/` and run with `wrangler d1 migrations apply`.
 - The Worker imports `src/game/reducer.ts`, `scope.ts`, `rng.ts` and `src/data/countries.ts` directly. It never imports React or anything under `src/ui`.
 
@@ -52,29 +52,20 @@ browser ──/assets, /, /leaderboards/…──▶ Workers static assets (no W
 | Worker requests | 100k/day | Only `/api/*` calls: about 3–6 per game, plus board views |
 | Worker CPU | 10 ms per request | Replaying a 197-country game is well under 5 ms; measured in tests |
 | D1 | 5M rows read and 100k rows written per day; 5 GB | About 3–5 writes per game; board reads are indexed |
-| Resend | 100 emails/day, 3,000/month | Capped at 90 codes/day by the Worker |
+| Google sign-in | Free; no app verification needed for the `openid email` scopes | One token exchange per sign-in |
 
-Sources: [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [Resend pricing](https://resend.com/pricing). Cloudflare's own [Email Sending](https://developers.cloudflare.com/email-service/) needs the paid Workers plan to reach arbitrary recipients, so it isn't used.
+Source: [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/).
 
 ## Data model (D1)
 
 ```sql
 users (
   id TEXT PRIMARY KEY,            -- random 128-bit, base64url
-  email TEXT NOT NULL UNIQUE,     -- trimmed, lowercased
+  google_sub TEXT NOT NULL UNIQUE,  -- Google's stable account id ("sub" claim)
+  email TEXT NOT NULL,            -- from Google, shown only to its owner in the user menu
   name TEXT,                      -- null until chosen
   name_key TEXT UNIQUE,           -- lowercased name, for case-insensitive uniqueness
   created_at INTEGER NOT NULL
-)
-login_codes (
-  id INTEGER PRIMARY KEY,
-  email TEXT NOT NULL,
-  ip_hash TEXT NOT NULL,          -- HMAC of the client IP; never the raw IP
-  code_hash TEXT NOT NULL,        -- HMAC(AUTH_SECRET, email + code)
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,    -- created + 10 min
-  attempts_left INTEGER NOT NULL, -- starts at 5
-  used_at INTEGER                 -- set on success or when superseded by a newer code
 )
 sessions (
   token_hash TEXT PRIMARY KEY,    -- HMAC of the cookie value
@@ -86,7 +77,7 @@ games (
   id TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users ON DELETE CASCADE,  -- null until claimed
   claim_hash TEXT,                -- HMAC of the claim token; cleared once claimed
-  ip_hash TEXT NOT NULL,
+  ip_hash TEXT NOT NULL,          -- HMAC of the client IP; never the raw IP
   mode TEXT NOT NULL,
   scope_key TEXT NOT NULL,        -- v1 scopeKey()
   time_limit_sec INTEGER,
@@ -110,28 +101,26 @@ bests (
 INDEX bests_rank ON bests (board, hints, ms, finished_at)
 INDEX games_user ON games (user_id, finished_at DESC)
 INDEX games_cleanup ON games (user_id, started_at)
-INDEX codes_email ON login_codes (email, created_at)
-INDEX codes_ip ON login_codes (ip_hash, created_at)
+INDEX games_ip ON games (ip_hash, started_at)
 ```
 
 **Housekeeping, done lazily on writes (no cron):**
 
 - Unclaimed games older than 24 hours are deleted when a game starts, at most 50 rows per call.
-- Login codes older than 2 days are deleted when a code is issued.
 - Expired sessions are deleted when someone signs in.
 
 ## API
 
-All bodies are JSON. Every non-GET request must carry `Content-Type: application/json` and an `Origin` equal to `APP_ORIGIN`; anything else gets a 403. Errors look like `{ "error": "<code>", "message": "<human text>" }`.
+All bodies are JSON. Every non-GET request must carry `Content-Type: application/json` and an `Origin` equal to the request's own origin (so it works on localhost and in production without configuration); anything else gets a 403. All API responses send `Cache-Control: no-store`. Errors look like `{ "error": "<code>", "message": "<human text>" }`.
 
 | Method and path | Body / query | Response |
 | --- | --- | --- |
-| `POST /api/auth/code` | `{ email }` | `200 {}` whether or not the account exists. `429 { retryAfter }` when rate limited; `503 busy` when the daily cap is hit. |
-| `POST /api/auth/verify` | `{ email, code }` | `200 { user: { name } }` and sets the session cookie; `name` is null for a new account. `400 wrong_code { attemptsLeft }`; `410 expired`. |
+| `GET /api/auth/google?return=/path` | — | `302` to Google, with a short-lived state cookie |
+| `GET /api/auth/google/callback` | `?code&state` (or `?error`) | Creates or finds the user, sets the session cookie, `302` back to `return`. On failure, `302` to `return?auth=failed`. |
 | `GET /api/auth/name?name=` | — | `{ available, reason? }` for the live check while typing |
 | `POST /api/auth/name` | `{ name }` | `200 { user }`, `409 taken` or `400 invalid`. Only allowed while the name is null. |
 | `POST /api/auth/signout` | — | Deletes the session and clears the cookie |
-| `GET /api/me` | — | `{ user: { name } | null }` |
+| `GET /api/me` | — | `{ user: { name, email } | null }`; `name` is null until chosen |
 | `DELETE /api/me` | `{ confirm: name }` | Deletes the user and, by cascade, their sessions, games and bests. Clears the cookie. |
 | `POST /api/games` | `{ config }` | `{ id, claim, seed, board }`. Owned from the start when signed in. `claim` is null when signed in. |
 | `POST /api/games/:id/finish` | `{ log }` | `{ found, total, hints, ms, endReason, ranked, reason?, rank?, newBest?, wouldRank? }` |
@@ -143,26 +132,48 @@ All bodies are JSON. Every non-GET request must carry `Content-Type: application
 
 ## Sign-in
 
-1. **Email.** `POST /api/auth/code`.
-   - Normalizes the email and checks the rate limits.
-   - Marks any older unused code for that email as used, then stores the new code's HMAC.
-   - Sends "Your Mapped code is 481 207", in both the subject and the body, from `Mapped <signin@lukeghanna.com>`.
-2. **Code.** Six boxes with `autocomplete="one-time-code"` and `inputmode="numeric"`. Pasting the full code fills all six.
-   - A wrong code decrements `attempts_left`; at zero, that code is dead.
-   - A correct code marks it used, creates the user if they're new, and creates a session.
-3. **Name.** New accounts only. 3–20 characters from `[A-Za-z0-9 _-]`, trimmed, with no double spaces. Unique by `name_key`.
-   - While the name is null, the user can't appear on boards. Their ranked games are still recorded, and their bests take effect once a name exists.
+**Flow (OpenID Connect authorization code with PKCE, all server-side; no Google JavaScript on the page, so the CSP is unchanged):**
 
-**Rate limits:** each is a count over `login_codes` rows, so no extra writes are needed.
+1. **Before leaving.** The client saves anything it needs to come back to in `sessionStorage`:
+   - `mapped:claims:v1`: claim tokens for games finished while signed out.
+   - `mapped:resume:v1`: the finished game's review state, so the review screen reappears after the round trip.
 
-- Per email: one code per 60 s, and at most 5 per hour.
-- Per IP hash: at most 10 codes per hour.
-- Site-wide: at most 90 codes per rolling 24 h. Past that, the card shows "Sign-in is busy right now. Try again tomorrow." The game keeps working.
-- Game starts: at most 200 per IP hash per hour, counted over `games`.
+   Then it navigates to `/api/auth/google?return=<current path>`.
+2. **`/api/auth/google`.**
+   - Makes a random `state` and a PKCE `verifier`.
+   - Stores `state`, `verifier` and `return` in an `HttpOnly; Secure; SameSite=Lax; Max-Age=600` cookie called `__Host-mapped_oauth`.
+   - `return` is accepted only if it starts with `/` and not `//`; otherwise it's `/`.
+   - Redirects to `https://accounts.google.com/o/oauth2/v2/auth` with `scope=openid email`, `response_type=code`, `prompt=select_account`, `code_challenge_method=S256`, `client_id`, `redirect_uri` (`<origin>/api/auth/google/callback`) and `state`.
+3. **`/api/auth/google/callback`.**
+   - Checks that `state` matches the cookie, then clears the cookie.
+   - POSTs the code, client id and secret, redirect URI and verifier to `https://oauth2.googleapis.com/token`.
+   - Reads the `id_token` payload. It came straight from Google's token endpoint over TLS, so per OIDC §3.1.3.7 its signature needn't be checked. The checks that remain:
+     - `iss` is `https://accounts.google.com` or `accounts.google.com`
+     - `aud` equals `GOOGLE_CLIENT_ID`
+     - `exp` is in the future
+     - `email_verified` is true
+   - Upserts the user by `sub`, refreshing the stored email.
+   - Creates a session, sets the cookie, deletes expired sessions, and redirects to `return`.
+   - Any failure, including the user cancelling (`?error=access_denied`), redirects to `return` with `?auth=failed`. The client shows "Sign-in didn't finish." and strips the parameter.
+4. **Back in the app.** On load, the client calls `GET /api/me`. When signed in, it claims every game in `mapped:claims:v1` and restores `mapped:resume:v1` if that's under 30 minutes old.
+5. **Name.** When `name` is null, the "Pick a name" card opens.
+   - 3–20 characters from `[A-Za-z0-9 _-]`, trimmed, with no double spaces. Unique by `name_key`.
+   - "Not now" leaves the account without a name. The name chip then reads "Pick a name".
+   - Without a name you don't appear on boards, but ranked games still record bests, which appear once you choose one.
 
-**Mail mode:** with `MAIL_MODE=log`, codes are written to the Worker log and returned by a dev-only `GET /api/dev/last-code?email=` for tests. That endpoint returns 404 unless `MAIL_MODE=log` *and* the request host is `localhost` or `127.0.0.1`. If the Worker sees `MAIL_MODE=log` on any other host, it refuses every auth request with a 500.
+**Rate limit:** game starts are capped at 200 per IP hash per hour, counted over `games`. Sign-in needs no limit of its own: Google rate-limits its side, and a callback without a valid state cookie does nothing.
 
-**DNS (one-time setup):** add Resend's DKIM and SPF records for `lukeghanna.com`, using Resend's send subdomain so existing mail for the domain is unaffected.
+**Fake mode, for end-to-end tests:** with `AUTH_MODE=fake`, `/api/auth/google?return=…&as=<email>` skips Google and goes straight to the callback with `code=fake:<email>`. The callback then uses `sub = 'fake:' + email` without calling Google.
+- Fake mode only works when the request host is `localhost` or `127.0.0.1`.
+- On any other host, if the Worker sees `AUTH_MODE=fake`, it answers every auth route with a 500.
+
+**Google Cloud setup (one-time, Luke):**
+1. Create a project.
+2. Set up the OAuth consent screen: External; app name Mapped; support email; authorized domain `lukeghanna.com`; scopes `openid` and `email` only; publish to production.
+3. Create a Web OAuth client with these redirect URIs:
+   - `https://mapped.lukeghanna.com/api/auth/google/callback`
+   - `http://localhost:8787/api/auth/google/callback`
+4. Basic scopes don't need Google's verification review.
 
 ## Game lifecycle and anti-cheat
 
@@ -176,6 +187,7 @@ All bodies are JSON. Every non-GET request must carry `Content-Type: application
   - `a` is the action without `now`: `found {id, corrected?}`, `click {id}`, `skip`, `hint {rand}`, `pause`, `resume`, `giveUp`.
   - The tick that ends a timed game is logged as `tick`. Other ticks aren't logged.
 - **Finish.** On entering review, the client sends `POST /api/games/:id/finish`. Unclaimed claim tokens are kept in `sessionStorage` (`mapped:claims:v1`) for 24 hours, and sent with `POST /api/games/claim` right after a successful sign-in.
+- **Restore.** A `restore` reducer action replaces the state with a saved review state (`GameState` is plain JSON).
 - **Ranked setups:**
   - The top bar shows a Ranked tag next to the setup pill.
   - The pause card adds "Pausing makes this run unranked."
@@ -223,9 +235,11 @@ All new screens use the v1 tokens and glass styles and work in both themes. On p
 - **Corner during setup** (top right): a Leaderboards link (trophy icon), then either a Sign in button or the name chip, then the theme toggle.
   - The name chip opens a menu: "Signed in as m•••@gmail.com", Your games, Leaderboards, Sign out, Delete account….
 - **Sign-in card** (`/signin`, or opened from the save prompt): a centred card over a dimmed map.
-  - Three steps with a progress bar: Email, then "Check your email" with six code boxes, "← Different email" and "Resend in 0:42", then "Pick a name" with a live availability check.
-  - "Not now" closes it. Esc closes it.
-  - Afterwards it returns to wherever it was opened from. From review, the just-finished game is claimed and the save card updates.
+  - The card says "Sign in to Mapped", then "Save your games and get on the leaderboards."
+  - Then a standard "Sign in with Google" button, following Google's branding: the white button with the four-colour G as inline SVG.
+  - Below it: "Only your display name is ever shown." and "Not now". Esc closes the card.
+- **Name card:** "Pick a name", with a live availability check, then Done and Not now. It opens by itself after the first sign-in.
+- **After signing in from review:** you land back on the same review screen. The game is claimed and the save card updates.
 - **Review save card** (bottom centre, where the guess box was). One of:
   - Signed out: "Sign in to save this run · 0 hints · 14:07 would put you #12 on World · Type", with Not now and Sign in.
   - New best: "Saved · #12 on World · Type · new personal best".
@@ -244,7 +258,7 @@ All new screens use the v1 tokens and glass styles and work in both themes. On p
 
 **Routing:** a small hand-written router using the History API, with no library.
 
-- Paths: `/`, `/signin`, `/leaderboards/:mode/:region`, `/me`.
+- Paths: `/`, `/signin`, `/leaderboards/:mode/:region`, `/me`. The `/api/*` paths are server-only.
 - During play and review the URL stays `/`.
 - Closing a card goes back to `/`. Unknown paths render setup.
 
@@ -253,19 +267,19 @@ All new screens use the v1 tokens and glass styles and work in both themes. On p
 ```
 worker/
   index.ts          route table, Origin/content-type guard, error mapping
-  auth.ts           codes, sessions, cookies, rate limits
+  auth.ts           Google OAuth, fake mode, sessions, cookies, names
   games.ts          start, finish, claim
   replay.ts         log validation + replay (pure; unit-tested without D1)
   boards.ts         board and Your games queries, recompute
-  mail.ts           Resend + log modes
   crypto.ts         HMAC, random ids
-  env.d.ts
+  env.ts            Env type and the small D1 interface the Worker uses
 migrations/0001_init.sql
 src/game/ranking.ts       boards, compareRuns, constants (shared)
 src/game/log.ts           action log types and recorder (shared)
 src/api/client.ts         typed fetch wrappers, timeout, offline handling
-src/api/session.ts        useSession() hook: user, signIn steps, signOut
-src/ui/SignInCard.tsx  src/ui/SaveCard.tsx  src/ui/Leaderboard.tsx
+src/api/session.ts        useSession() hook: user, signIn (redirect), setName, signOut
+src/api/resume.ts         sessionStorage for claims and the review to restore
+src/ui/SignInCard.tsx  src/ui/NameCard.tsx  src/ui/SaveCard.tsx  src/ui/Leaderboard.tsx
 src/ui/YourGames.tsx   src/ui/UserMenu.tsx  src/ui/router.ts
 scripts/recompute-bests.ts
 ```
@@ -276,13 +290,10 @@ scripts/recompute-bests.ts
 
 - **Network:** any API failure during play is silent. The game is never blocked by the server.
 - **Save card:** shows "Couldn't save: Retry" when `/finish` fails. Retrying resends the same log; the server's `finished_at` is the first receipt.
-- **Sign-in errors** appear inline under the field:
-  - Wrong code: "That code isn't right. 3 tries left."
-  - Expired: "That code expired. Send a new one."
-  - Rate limited: "Wait 0:42 before asking for another code."
-  - Busy: as above.
+- **Sign-in failure** (cancelled, state mismatch, Google error): "Sign-in didn't finish. Try again." as a toast. No details are leaked.
+- **Name errors** appear inline under the field: "That name is taken." or "3–20 letters, numbers, spaces, - or _".
 - **Session:** a 401 on a signed-in call clears the local session state and shows Sign in. It never logs a game out mid-play.
-- **Worker:** all errors are caught at the router. Unexpected errors return `500 { error: 'server' }` and are logged with the request id, never with emails or codes.
+- **Worker:** all errors are caught at the router. Unexpected errors return `500 { error: 'server' }` and are logged with the request id, never with emails, tokens or codes.
 
 ## Testing
 
@@ -298,30 +309,35 @@ scripts/recompute-bests.ts
       - a rand outside [0, 1)
       - a reordered Locate queue
   - `ranking.ts`: `boardFor()` and `compareRuns()`.
-  - Name rules, email normalization, cookie building, and HMAC helpers.
+  - Name rules, the `return` path check, ID-token claim checks, cookie building, PKCE challenge, and HMAC helpers.
   - A CPU check: replaying a 197-country Type log 1,000 times stays under 2 ms per replay.
-- **Worker integration (`@cloudflare/vitest-pool-workers`, real local D1):**
+- **Worker integration (Vitest in Node, calling the Worker's `fetch` with bindings from wrangler's `getPlatformProxy()`, so D1 is real and local):**
+  - `@cloudflare/vitest-pool-workers` needs Vitest 4, so it isn't used.
   - Every endpoint.
-  - The code flow: a wrong code, expiry, a superseded code.
-  - Every rate limit and the daily cap.
+  - The Google flow with Google's token endpoint mocked through a stubbed `fetch`:
+    - a state mismatch
+    - a wrong `aud`
+    - an unverified email
+    - a returning user (same `sub`, new email)
+    - a cancelled sign-in
+  - The game-start rate limit.
   - Claiming a game.
   - Ranked vs unranked outcomes.
   - The `bests` upsert, and recompute after a delete.
   - Delete account cascades.
-  - The Origin guard, and the dev endpoint being unreachable on non-localhost hosts.
-  - Compatibility with Vitest 5 gets confirmed first in planning. If it doesn't work, use Miniflare's API directly from Vitest instead.
-- **E2E (Playwright against `wrangler dev`, local D1, `MAIL_MODE=log`):**
-  - Play a seeded Europe Type game signed out, finish, sign in via the dev code endpoint, pick a name: the game is claimed and appears at its rank on `/leaderboards/type/europe`.
+  - The Origin guard, and fake mode being refused on non-localhost hosts.
+- **E2E (Playwright against `wrangler dev`, local D1, `AUTH_MODE=fake`):**
+  - Play a seeded South America Type game signed out, then sign in through fake mode: you come back to the same review, pick a name, and the game is claimed and appears on `/leaderboards/type/south-america`.
   - A paused run shows "Unranked: paused".
   - A deep link to `/leaderboards/locate/asia` opens that board.
   - Sign out.
-  - Phone layout for the sign-in sheet.
+  - Phone layout for the sign-in card.
   - The existing 13 v1 specs keep passing.
 - **CI:** applies migrations to a local D1 before running the tests. The size budget check stays.
 
 ## Rollout
 
-1. Create the D1 database, apply migrations, and set secrets (`wrangler secret put`).
-2. Add the Resend DNS records and verify the domain in Resend.
+1. Luke creates the Google OAuth client (see Sign-in).
+2. Create the D1 database, apply migrations, and set `GOOGLE_CLIENT_ID` (var) and the `GOOGLE_CLIENT_SECRET` and `AUTH_SECRET` secrets (`wrangler secret put`).
 3. Deploy. v1 behaviour is unchanged for anyone who never signs in.
 4. Update the README (stack, local dev with `wrangler dev`, migrations). Remove the Vercel files (`vercel.json`) and the Vercel row from the headers sync test.
