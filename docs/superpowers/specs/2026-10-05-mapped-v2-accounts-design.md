@@ -1,7 +1,7 @@
 # Mapped v2: accounts and leaderboards
 
 **Date:** 2026-10-05
-**Status:** Approved; sign-in switched from email codes to Google before planning
+**Status:** Approved; implemented in v2 (see Revisions during planning)
 **Builds on:** [v1 design](2026-10-05-mapped-design.md)
 **Mockups:** `.superpowers/brainstorm/39123-1791265063/content/accounts-screens.html` (local only)
 
@@ -28,6 +28,25 @@ Players can sign in with Google. Signed-in players' games are saved, and complet
 - An admin UI (moderation is `wrangler d1 execute` and a recompute script)
 - Bot detection beyond the replay check and speed floor
 - Vercel hosting (dropped; D1 is Cloudflare-only)
+
+## Revisions during planning
+
+- A log that fails to replay (bad shape, impossible actions) is answered with 422 unverified and the game row is deleted, instead of being stored with empty stats. Runs that replay but are too fast or out of step with the server clock are still stored as Unranked: couldn't verify.
+- The save card's Sign in button goes straight to Google, a single click; the sign-in card is used from the setup corner and /signin.
+- The Origin check compares against the request's own origin, so APP_ORIGIN isn't needed.
+- Full-stack local dev is npm run dev:full (build + wrangler dev on 8787 in fake sign-in mode). npm run dev (Vite only) still works, offline.
+- wrangler dev needs --local-upstream localhost:<port>. Without it the Worker sees the production hostname and refuses fake mode.
+
+## Revisions during implementation
+
+- Clock tolerance is 3 s, not 2 s; the start time is stamped just before the game row is written.
+- /finish is idempotent: finishing an already-saved game returns its saved result, so a retry after a lost response works.
+- The browser retries a failed /finish once, 800 ms later.
+- A claim request handles at most 8 games; the browser sends them in batches of 8.
+- The game pool is ordered by country id, not by name, so every browser shuffles the same order whatever its language.
+- Sign-in hardening: return paths are normalized and must stay on this site; fake mode is refused for every route off localhost; signing in revokes the session the browser already had.
+- Games and claims are protected against double-finish and double-claim races.
+- A 401 on a signed-in call signs the browser out locally. The name card opens by itself once per browser session.
 
 ## Architecture
 
