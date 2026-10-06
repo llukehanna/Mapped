@@ -72,7 +72,8 @@ export function replay(config: GameConfig, seed: number, log: LogEntry[]): Repla
     if (next === state) return null;
     if (next.found.length > state.found.length) findTimes.push(entry.t);
     if (entry.a.type === 'pause') paused = true;
-    state = next;
+    // The reducer appends to the log it is given; nobody reads it here, so keep it empty (linear, not quadratic).
+    state = next.log.length ? { ...next, log: [] } : next;
   }
   return state.phase === 'review' ? { state, findTimes, paused } : null;
 }
