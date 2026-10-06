@@ -9,6 +9,9 @@ export const MAX_CLAIMS_PER_REQUEST = 8;
 /** Most bests one /api/me/import request takes; the browser sends its saved bests in batches of this many. */
 export const MAX_IMPORTS_PER_REQUEST = 25;
 
+/** Most pre-accounts bests one account can ever import; a real browser holds a few dozen. */
+export const MAX_IMPORTED_PER_ACCOUNT = 200;
+
 /** Bests saved in the browser before this moment (the v2 launch, 2026-10-06 21:30 UTC) are imported; later runs already went to the server. */
 export const LOCAL_IMPORT_BEFORE = 1791322200000;
 
