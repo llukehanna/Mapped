@@ -1,7 +1,7 @@
 import type { LogEntry } from '../game/log.ts';
 import type { Region } from '../game/ranking.ts';
 import type { GameConfig, Mode } from '../game/types.ts';
-import type { BoardResponse, GameResult, MyGamesResponse, StartResponse, User } from './types.ts';
+import type { BoardResponse, GameResult, ImportEntry, MyGamesResponse, StartResponse, User } from './types.ts';
 
 export class ApiError extends Error {
   /** 0 when the server couldn't be reached */
@@ -49,6 +49,7 @@ export const api = {
   startGame: (config: GameConfig) => request<StartResponse>('POST', '/api/games', { config }, START_TIMEOUT_MS),
   finishGame: (id: string, log: LogEntry[]) => request<GameResult>('POST', `/api/games/${id}/finish`, { log }),
   claim: (claims: { id: string; claim: string }[]) => request<{ results: GameResult[] }>('POST', '/api/games/claim', { claims }),
+  importBests: (results: ImportEntry[]) => request<{ imported: number }>('POST', '/api/me/import', { results }),
   board: (mode: Mode, region: Region) => request<BoardResponse>('GET', `/api/boards/${mode}/${region}`),
   myGames: () => request<MyGamesResponse>('GET', '/api/me/games'),
 };
