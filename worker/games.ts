@@ -12,6 +12,8 @@ import { judge, parseLog } from './replay.ts';
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 export const STARTS_PER_HOUR = 200;
+/** Each claim costs 4-5 D1 queries and a Worker invocation may make 50 on the free plan. */
+export const MAX_CLAIMS_PER_REQUEST = 8;
 
 interface GameRow {
   id: string;
@@ -93,6 +95,7 @@ export async function finishGame(req: Request, env: Env, id: string): Promise<Re
   const config = JSON.parse(game.config) as GameConfig;
   const verdict = log && judge({ config, seed: game.seed, log, board: game.board, serverElapsedMs: receivedAt - game.started_at });
   if (!verdict) {
+    console.error('unverified log', id, Array.isArray(body.log) ? body.log.length : typeof body.log);
     await env.DB.prepare('DELETE FROM games WHERE id = ? AND finished_at IS NULL').bind(id).run();
     throw new HttpError(422, 'unverified', "This game couldn't be verified.");
   }
@@ -127,7 +130,7 @@ export async function finishGame(req: Request, env: Env, id: string): Promise<Re
 export async function claimGames(req: Request, env: Env): Promise<Response> {
   const user = await requireUser(req, env);
   const body = await readBody(req);
-  const claims = Array.isArray(body.claims) ? body.claims.slice(0, 20) : [];
+  const claims = Array.isArray(body.claims) ? body.claims.slice(0, MAX_CLAIMS_PER_REQUEST) : [];
   const results: GameResult[] = [];
   for (const c of claims as { id?: unknown; claim?: unknown }[]) {
     if (typeof c?.id !== 'string' || typeof c.claim !== 'string') continue;
