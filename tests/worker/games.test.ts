@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { BoardResponse, GameResult, MyGamesResponse, StartResponse } from '../../src/api/types.ts';
 import type { GameConfig } from '../../src/game/types.ts';
 import type { D1Database, Env } from '../../worker/env.ts';
-import { MAX_CLAIMS_PER_REQUEST, STARTS_PER_HOUR } from '../../worker/games.ts';
+import { MAX_CLAIMS_PER_REQUEST, STARTS_PER_HOUR, UNCLAIMED_KEEP_DAYS } from '../../worker/games.ts';
 import { call, signIn, startDb, statements, testEnv, wipe } from './harness.ts';
 import { play, typeAll, type Move } from './play.ts';
 
@@ -60,11 +60,22 @@ describe('starting a game', () => {
     expect((await call(env, 'POST', '/api/games', { body: { config: SOUTH_AMERICA }, ip: '198.51.100.9' })).status).toBe(200);
   });
 
-  it('clears unclaimed and abandoned games older than a day', async () => {
+  it('clears unfinished games older than a day', async () => {
     const old = await start();
     await db.prepare('UPDATE games SET started_at = ?').bind(Date.now() - 2 * 86_400_000).run();
     await start();
     expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(old.id).first()).toBeNull();
+  });
+
+  it('keeps unclaimed finished games for 90 days', async () => {
+    const recent = await playGame();
+    const old = await playGame();
+    const age = (id: string, days: number) => db.prepare('UPDATE games SET started_at = ?, finished_at = ? WHERE id = ?').bind(Date.now() - days * 86_400_000, Date.now() - days * 86_400_000, id).run();
+    await age(recent.game.id, 2);
+    await age(old.game.id, UNCLAIMED_KEEP_DAYS + 1);
+    await start();
+    expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(recent.game.id).first()).not.toBeNull();
+    expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(old.game.id).first()).toBeNull();
   });
 
   it('housekeeping keeps owned, finished games older than a day', async () => {

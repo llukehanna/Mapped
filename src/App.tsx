@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, signInHref, type ApiError } from './api/client.ts';
-import { addClaim, readClaims, removeClaims, saveResume, sessionStore, takeResume, type Run, type SaveState } from './api/resume.ts';
+import { addClaim, migrateClaims, readClaims, removeClaims, saveResume, sessionStore, takeResume, type Run, type SaveState } from './api/resume.ts';
 import { useSession } from './api/session.ts';
 import { MAX_CLAIMS_PER_REQUEST, type BestSummary } from './api/types.ts';
 import { COUNTRIES } from './data/countries.ts';
@@ -249,9 +249,11 @@ export function App() {
       writeJson(session, NAME_ASKED, true);
       setCard('name');
     }
-    const claims = readClaims(session, Date.now());
-    if (claims.length === 0) return void refreshBests();
-    void claimAll(claims, resume?.run?.id);
+    // Claims used to live in sessionStorage; they last 90 days in localStorage now.
+    migrateClaims(session, storage, Date.now());
+    const claims = readClaims(storage, Date.now());
+    if (claims.length === 0) refreshBests();
+    else void claimAll(claims, resume?.run?.id);
   }, [user]);
 
   // Already signed in: /signin has nothing to show.
@@ -265,7 +267,7 @@ export function App() {
       const chunk = claims.slice(i, i + MAX_CLAIMS_PER_REQUEST).map(({ id, claim }) => ({ id, claim }));
       try {
         const { results } = await api.claim(chunk);
-        removeClaims(session, chunk.map((c) => c.id));
+        removeClaims(storage, chunk.map((c) => c.id));
         const mine = results.find((r) => r.id === resumedId);
         if (mine && currentRun.current === mine.id) setSave({ status: 'saved', result: mine });
       } catch (e) {
@@ -299,7 +301,7 @@ export function App() {
       api.finishGame(game.id, log).then(
         (result) => {
           if (currentRun.current === game.id) setSave({ status: 'saved', result });
-          if (game.claim) addClaim(session, { id: game.id, claim: game.claim }, Date.now());
+          if (game.claim) addClaim(storage, { id: game.id, claim: game.claim }, Date.now());
           if (result.board && result.best) setBests((m) => new Map(m).set(result.board!, result.best!));
         },
         (e: ApiError) => {

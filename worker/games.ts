@@ -12,6 +12,8 @@ import { judge, parseLog } from './replay.ts';
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 export const STARTS_PER_HOUR = 200;
+/** Finished games nobody has claimed are kept this long, so signing in later on the same browser still finds them. */
+export const UNCLAIMED_KEEP_DAYS = 90;
 // Each claim costs 4-5 D1 queries and a Worker invocation may make 50 on the free plan.
 export { MAX_CLAIMS_PER_REQUEST };
 
@@ -50,10 +52,10 @@ export async function startGame(req: Request, env: Env): Promise<Response> {
   // The start time is taken last, right before the insert, so the lookups above never count against the player's clock.
   const now = Date.now();
   await env.DB.batch([
-    // Housekeeping: unclaimed or abandoned games older than a day.
+    // Housekeeping: abandoned games older than a day, and unclaimed finished games past their 90 days.
     env.DB.prepare(
-      'DELETE FROM games WHERE id IN (SELECT id FROM games WHERE (user_id IS NULL OR finished_at IS NULL) AND started_at < ? LIMIT 50)',
-    ).bind(now - DAY_MS),
+      'DELETE FROM games WHERE id IN (SELECT id FROM games WHERE (finished_at IS NULL AND started_at < ?) OR (user_id IS NULL AND finished_at < ?) LIMIT 50)',
+    ).bind(now - DAY_MS, now - UNCLAIMED_KEEP_DAYS * DAY_MS),
     env.DB.prepare(
       'INSERT INTO games (id, user_id, claim_hash, ip_hash, config, mode, scope_key, board, seed, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ).bind(id, user?.id ?? null, claimHash, ipHash, JSON.stringify(config), config.mode, scopeKey(config.scope), board, seed, now),
