@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.superpowers/
+.wrangler/
+.vercel/
+test-results/
+playwright-report/
+.DS_Store
