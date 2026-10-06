@@ -57,7 +57,10 @@ export function safeReturn(value: string | null): string {
   if (!value || value.length > 200 || /[\x00-\x1f\x7f]/.test(value) || !value.startsWith('/')) return '/';
   try {
     const url = new URL(value, 'http://x');
-    return url.origin === 'http://x' ? url.pathname + url.search + url.hash : '/';
+    if (url.origin !== 'http://x') return '/';
+    const result = url.pathname + url.search + url.hash;
+    if (result.startsWith('//') || result.startsWith('/\\')) return '/';
+    return result;
   } catch {
     return '/';
   }
