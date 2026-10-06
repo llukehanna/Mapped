@@ -25,6 +25,10 @@ describe('pure helpers', () => {
     expect(safeReturn('/\t/evil.com')).toBe('/');
     expect(safeReturn('/\n/evil.com')).toBe('/');
     expect(safeReturn('/ /evil.com')).toBe('/%20/evil.com');
+    expect(safeReturn('/.//evil.com')).toBe('/');
+    expect(safeReturn('/..//evil.com')).toBe('/');
+    expect(safeReturn('/%2e//evil.com')).toBe('/');
+    expect(safeReturn('/a/..//evil.com')).toBe('/');
   });
 
   it('cleanName enforces the name rules', () => {
@@ -142,6 +146,16 @@ describe('Google sign-in', () => {
     const state = new URL(start.headers.get('Location')!).searchParams.get('state');
     const callback = await call(env, 'GET', `/api/auth/google/callback?code=abc&state=${state}`, { cookie: cookiesFrom(start) });
     expect(callback.headers.get('Location')).toBe('/me?auth=failed');
+  });
+
+  it('dot-slash paths that normalize to another host are rejected', async () => {
+    const env = testEnv(db);
+    const res = await call(env, 'GET', '/api/auth/google?return=%2F.%2F%2Fevil.com');
+    const state = new URL(res.headers.get('Location')!).searchParams.get('state');
+    const callback = await call(env, 'GET', `/api/auth/google/callback?code=${encodeURIComponent('fake:test@test.com')}&state=${state}`, {
+      cookie: cookiesFrom(res),
+    });
+    expect(callback.headers.get('Location')).toBe('/');
   });
 });
 
