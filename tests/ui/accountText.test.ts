@@ -29,6 +29,15 @@ describe('save card text', () => {
     });
   });
 
+  it('signed out, anonymous, no rank: fallback message without ranking', () => {
+    expect(saveMessage(saved({ ranked: false, reason: 'anonymous', wouldRank: null }), false)).toMatchObject({
+      tone: 'gold',
+      title: 'Sign in to save this run',
+      detail: '0 hints · 14:07. Sign in to put it on the leaderboard.',
+      signIn: true,
+    });
+  });
+
   it('signed out, not rankable: still offers to keep it', () => {
     expect(saveMessage(saved({ ranked: false, reason: 'custom', board: null }), false)).toMatchObject({
       title: 'Sign in to keep your games',

@@ -50,7 +50,7 @@ export function saveMessage(save: SaveState, signedIn: boolean): SaveMessage {
   const r = save.result;
   const label = r.board && boardLabel(r.board);
   if (r.reason === 'anonymous') {
-    const detail = `${hintsText(r.hints)} · ${formatClock(r.ms)} would put you #${r.wouldRank} on ${label}.`;
+    const detail = r.wouldRank === null || !label ? `${hintsText(r.hints)} · ${formatClock(r.ms)}. Sign in to put it on the leaderboard.` : `${hintsText(r.hints)} · ${formatClock(r.ms)} would put you #${r.wouldRank} on ${label}.`;
     return msg('gold', 'Sign in to save this run', detail, { signIn: true, board: r.board });
   }
   if (!r.ranked && !signedIn) return msg('plain', 'Sign in to keep your games', `Unranked: ${REASON_TEXT[r.reason!]}.`, { signIn: true });

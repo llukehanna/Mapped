@@ -8,6 +8,7 @@
 .veil { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--page) 62%, transparent); animation: veil-in 200ms var(--ease); }
 @keyframes veil-in { from { opacity: 0; } }
 .center-card { width: min(420px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 22px 24px 24px; display: grid; gap: 16px; align-content: start; background: linear-gradient(var(--panel-bg), var(--panel-bg)), var(--page); border-radius: 16px; animation: card-up 320ms var(--ease); }
+.center-card:focus { outline: none; }
 .center-card.wide { width: min(720px, 100%); }
 @keyframes card-up { from { opacity: 0; transform: translateY(10px); } }
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -21,10 +22,11 @@
 .google-btn:hover { background: #f8f9fa; }
 
 .name-form { display: grid; gap: 8px; }
-.field { height: 46px; padding: 0 14px; border-radius: 11px; border: 1px solid var(--chrome-line); background: color-mix(in srgb, var(--ink) 4%, transparent); font-size: 15px; outline: none; }
+.field { height: 46px; padding: 0 14px; border-radius: 11px; border: 1px solid var(--chrome-line); background: color-mix(in srgb, var(--ink) 4%, transparent); font-size: 15px; }
 .field:focus { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .field-note { font-size: 12px; color: var(--mute); min-height: 16px; }
 .field-note.ok { color: #8fc28a; }
+:root[data-theme='light'] .field-note.ok { color: #3d7a37; }
 .field-note.bad { color: var(--danger); }
 .btn.wide-btn { justify-content: center; height: 44px; margin-top: 6px; }
 .btn:disabled { opacity: 0.45; cursor: default; }
@@ -47,7 +49,7 @@
 
 /* Review: what happened to this game on the server, where the guess box was. */
 .save-dock { position: fixed; z-index: 20; bottom: calc(22px + env(safe-area-inset-bottom)); left: calc(50% - 150px); transform: translateX(-50%); width: min(560px, calc(100% - 340px)); }
-.savecard { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 18px; background: var(--panel-bg); }
+.savecard { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 18px; background: linear-gradient(var(--panel-bg), var(--panel-bg)), var(--page); }
 .savecard.gold { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .savecard.warn { border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .savecard-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
@@ -92,5 +94,5 @@ button.best-cell:hover { background: color-mix(in srgb, var(--ink) 6%, transpare
   .best-cell { flex-direction: column; gap: 0; }
   .best-cell .mute { display: none; }
   .recent li { grid-template-columns: 48px minmax(0, 1fr) 54px auto; }
-  .recent li > span:nth-child(4) { display: none; }
+  .recent li > span:nth-child(3) { display: none; }
 }

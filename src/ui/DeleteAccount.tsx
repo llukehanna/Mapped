@@ -12,7 +12,7 @@ export function DeleteAccount({ user, onDeleted, onClose }: { user: User; onDele
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    api.deleteAccount(typed).then(onDeleted, (err: Error) => {
+    api.deleteAccount(typed.trim()).then(onDeleted, (err: Error) => {
       setBusy(false);
       setError(err.message);
     });
@@ -29,7 +29,7 @@ export function DeleteAccount({ user, onDeleted, onClose }: { user: User; onDele
           <button type="button" className="btn" onClick={onClose}>
             Keep my account
           </button>
-          <button type="submit" className="btn danger" disabled={busy || typed !== expected}>
+          <button type="submit" className="btn danger" disabled={busy || typed.trim() !== expected}>
             Delete account
           </button>
         </div>

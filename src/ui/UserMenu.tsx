@@ -16,10 +16,18 @@ interface UserMenuProps {
 export function UserMenu({ user, onGames, onBoards, onPickName, onSignOut, onDelete }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const chipBtn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
+    const firstMenuItem = ref.current?.querySelector('[role="menuitem"]') as HTMLElement | null;
+    if (firstMenuItem) firstMenuItem.focus();
     const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        chipBtn.current?.focus();
+      }
+    };
     window.addEventListener('pointerdown', away);
     window.addEventListener('keydown', esc);
     return () => {
@@ -33,7 +41,7 @@ export function UserMenu({ user, onGames, onBoards, onPickName, onSignOut, onDel
   };
   return (
     <div className="user-menu" ref={ref}>
-      <button type="button" className="namechip" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button ref={chipBtn} type="button" className="namechip" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="avatar" aria-hidden="true">
           {(user.name ?? user.email)[0].toUpperCase()}
         </span>
@@ -42,7 +50,7 @@ export function UserMenu({ user, onGames, onBoards, onPickName, onSignOut, onDel
       </button>
       {open && (
         <div className="menu glass" role="menu">
-          <div className="menu-who mute">Signed in as {maskEmail(user.email)}</div>
+          <div className="menu-who mute" role="none">Signed in as {maskEmail(user.email)}</div>
           {user.name === null && (
             <button type="button" role="menuitem" onClick={pick(onPickName)}>
               Pick a name
