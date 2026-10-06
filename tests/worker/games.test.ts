@@ -149,15 +149,33 @@ describe('finishing a game', () => {
   it('the 422 delete does not remove an already finished game', async () => {
     const { game } = await playGame();
     const res = await call(env, 'POST', `/api/games/${game.id}/finish`, { body: { log: [{ t: 10, a: { type: 'found', id: 'FRA' } }] } });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
     expect(await db.prepare('SELECT 1 FROM games WHERE id = ?').bind(game.id).first()).not.toBeNull();
   });
 
-  it('a game can only be finished once', async () => {
-    const { game } = await playGame();
-    const again = await call(env, 'POST', `/api/games/${game.id}/finish`, { body: { log: [] } });
-    expect(again.status).toBe(409);
+  it('finishing twice returns the same result and changes nothing: a retry after a lost response works', async () => {
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    const { game, result } = await playGame(ana);
+    const stored = () => db.prepare('SELECT finished_at, ms, hints, found, ranked, log FROM games WHERE id = ?').bind(game.id).first();
+    const before = await stored();
+    // The second call, even with a different log, is answered from the stored result.
+    const again = await call(env, 'POST', `/api/games/${game.id}/finish`, { cookie: ana, body: { log: [] } });
+    expect(again.status).toBe(200);
+    // Same result; the best was already recorded the first time, so it isn't "new" again.
+    expect(result.newBest).toBe(true);
+    expect(await again.json()).toEqual({ ...result, newBest: false });
+    expect(await stored()).toEqual(before);
+    expect((await board()).rows).toHaveLength(1);
     expect((await call(env, 'POST', '/api/games/nope/finish', { body: { log: [] } })).status).toBe(404);
+  });
+
+  it('a signed-out player can retry finishing and still claim afterwards', async () => {
+    const { game, result } = await playGame();
+    const again = await (await call(env, 'POST', `/api/games/${game.id}/finish`, { body: { log: [] } })).json();
+    expect(again).toEqual(result);
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    const claimed = await (await call(env, 'POST', '/api/games/claim', { cookie: ana, body: { claims: [{ id: game.id, claim: game.claim }] } })).json();
+    expect(claimed.results).toEqual([expect.objectContaining({ id: game.id, ranked: true })]);
   });
 });
 
