@@ -84,7 +84,8 @@ export async function finishGame(req: Request, env: Env, id: string): Promise<Re
   const body = await readBody(req);
   const game = await env.DB.prepare('SELECT * FROM games WHERE id = ?').bind(id).first<GameRow>();
   if (!game) throw new HttpError(404, 'not_found', "That game isn't on record.");
-  if (game.finished_at !== null) throw new HttpError(409, 'finished', 'That game was already saved.');
+  // A retry after a lost response: say what was saved. (The game id is a bearer secret; `result` is idempotent.)
+  if (game.finished_at !== null) return json(await result(env, game));
 
   const log = parseLog(body.log);
   const config = JSON.parse(game.config) as GameConfig;
@@ -111,7 +112,12 @@ export async function finishGame(req: Request, env: Env, id: string): Promise<Re
   )
     .bind(receivedAt, done.found, done.total, done.hints, done.ms, done.end_reason, done.ranked, reason, JSON.stringify(log), id, game.user_id)
     .run();
-  if (saved.meta.changes === 0) throw new HttpError(409, 'finished', 'That game was already saved.');
+  if (saved.meta.changes === 0) {
+    // Lost a race with another finish (same game), or the game changed hands meanwhile.
+    const now = await env.DB.prepare('SELECT * FROM games WHERE id = ?').bind(id).first<GameRow>();
+    if (now?.finished_at != null) return json(await result(env, now));
+    throw new HttpError(409, 'finished', 'That game was already saved.');
+  }
   return json(await result(env, done));
 }
 
