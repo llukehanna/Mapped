@@ -62,3 +62,7 @@ npm run recompute-bests -- --remote
 ```
 
 `npm run deploy` refuses to run while `REPLACE_WITH_` placeholders remain in wrangler.jsonc.
+
+## Credits
+
+Flags from [flag-icons](https://github.com/lipis/flag-icons) (MIT).
