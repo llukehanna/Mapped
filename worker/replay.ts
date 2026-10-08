@@ -54,6 +54,7 @@ export interface Replayed {
   state: GameState;
   /** log times of each successful find, in order */
   findTimes: number[];
+  /** paused at some point, not counting a pause straight into giving up */
   paused: boolean;
 }
 
@@ -66,12 +67,16 @@ export function replay(config: GameConfig, seed: number, log: LogEntry[]): Repla
   let state = reduce(initialState(config), { type: 'start', config, pool, order: shuffle(pool, seededRandom(seed)), now: 0 });
   const findTimes: number[] = [];
   let paused = false;
+  let previous: LogEntry | null = null;
   for (const entry of log) {
     if (state.phase === 'review') return null;
     const next = reduce(state, toAction(entry, 0));
     if (next === state) return null;
     if (next.found.length > state.found.length) findTimes.push(entry.t);
-    if (entry.a.type === 'pause') paused = true;
+    // The first version's "Give up?" dialog paused the clock before giving up. A pause straight into giving up gains
+    // nothing (nothing can be found while paused, and the clock froze at the pause), so only other pauses count.
+    if (previous?.a.type === 'pause' && entry.a.type !== 'giveUp') paused = true;
+    previous = entry;
     // The reducer appends to the log it is given; nobody reads it here, so keep it empty (linear, not quadratic).
     state = next.log.length ? { ...next, log: [] } : next;
   }
@@ -102,7 +107,11 @@ export function judge({ config, seed, log, board, serverElapsedMs }: JudgeInput)
   const played = replay(config, seed, log);
   if (!played) return null;
   const { state, findTimes, paused } = played;
-  const result = { found: state.found.length, total: state.pool.length, hints: state.hintsUsed, ms: state.elapsedMs, endReason: state.endReason! };
+  // A pause straight into giving up counts as time played, up to the give-up, as if the clock had kept running (it does now).
+  // Otherwise a squashed log could hide behind a pause and a late give-up.
+  const pausedToGiveUp = log.length >= 2 && log.at(-2)!.a.type === 'pause' && log.at(-1)!.a.type === 'giveUp';
+  const ms = pausedToGiveUp ? log.at(-1)!.t : state.elapsedMs;
+  const result = { found: state.found.length, total: state.pool.length, hints: state.hintsUsed, ms, endReason: state.endReason! };
   // Unfinished runs rank too (more found first), so the speed check is per country found.
   const tooFast =
     result.ms / result.found < MIN_MS_PER_COUNTRY || findTimes.some((t, i) => i > 0 && t - findTimes[i - 1] < MIN_FIND_GAP_MS);
