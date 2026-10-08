@@ -1,6 +1,7 @@
 import { COUNTRIES } from '../data/countries.ts';
 import type { Continent } from '../data/types.ts';
 import { CONTINENTS, isWorld } from './scope.ts';
+import { TOPICS, TOPIC_LABEL, topicOf, type Topic } from './topics.ts';
 import type { GameConfig, Mode, Scope } from './types.ts';
 
 /** Anti-cheat thresholds, shared by the client (to explain) and the server (to judge). */
@@ -11,7 +12,12 @@ export const CLOCK_TOLERANCE_MS = 3000;
 export type Region = 'world' | Continent;
 export const BOARD_MODES: Mode[] = ['type', 'locate', 'identify'];
 export const BOARD_REGIONS: Region[] = ['world', ...CONTINENTS.map((c) => c.id)];
-export type Board = `${Mode}:${Region}`;
+export const BOARD_TOPICS: Topic[] = TOPICS;
+export type Board = `${Mode}:${Region}` | `${Exclude<Topic, 'countries'>}:${Mode}:${Region}`;
+
+export function boardKey(topic: Topic, mode: Mode, region: Region): Board {
+  return (topic === 'countries' ? `${mode}:${region}` : `${topic}:${mode}:${region}`) as Board;
+}
 
 const MODE_LABEL: Record<Mode, string> = { type: 'Type', locate: 'Locate', identify: 'Identify' };
 export const regionLabel = (region: Region) => (region === 'world' ? 'World' : CONTINENTS.find((c) => c.id === region)!.label);
@@ -19,21 +25,22 @@ export const regionLabel = (region: Region) => (region === 'world' ? 'World' : C
 /** The leaderboard a setup counts toward: World or exactly one whole continent. Any time limit. */
 export function boardFor(config: GameConfig): Board | null {
   const { continents, subregions } = config.scope;
-  if (isWorld(config.scope)) return `${config.mode}:world`;
-  if (subregions.length === 0 && continents.length === 1) return `${config.mode}:${continents[0]}`;
-  return null;
+  const region: Region | null = isWorld(config.scope) ? 'world' : subregions.length === 0 && continents.length === 1 ? continents[0] : null;
+  return region && boardKey(topicOf(config), config.mode, region);
 }
 
-export function parseBoard(board: string): { mode: Mode; region: Region } | null {
-  const [mode, region, extra] = board.split(':');
-  if (extra !== undefined || !BOARD_MODES.includes(mode as Mode) || !BOARD_REGIONS.includes(region as Region)) return null;
-  return { mode: mode as Mode, region: region as Region };
+export function parseBoard(board: string): { topic: Topic; mode: Mode; region: Region } | null {
+  const parts = board.split(':');
+  const [topic, mode, region] = parts.length === 2 ? ['countries', ...parts] : parts;
+  if (parts.length === 3 && topic === 'countries') return null;
+  if (parts.length > 3 || !TOPICS.includes(topic as Topic) || !BOARD_MODES.includes(mode as Mode) || !BOARD_REGIONS.includes(region as Region)) return null;
+  return { topic: topic as Topic, mode: mode as Mode, region: region as Region };
 }
 
-/** "World · Type" */
+/** "World · Type", or "World · Flags · Type" */
 export function boardLabel(board: Board): string {
-  const { mode, region } = parseBoard(board)!;
-  return `${regionLabel(region)} · ${MODE_LABEL[mode]}`;
+  const { topic, mode, region } = parseBoard(board)!;
+  return [regionLabel(region), ...(topic === 'countries' ? [] : [TOPIC_LABEL[topic]]), MODE_LABEL[mode]].join(' · ');
 }
 
 export interface Run {
@@ -55,7 +62,8 @@ const strings = (v: unknown): v is string[] => Array.isArray(v) && v.length <= 4
 /** A game config from untrusted JSON, or null if it isn't one the setup card could have made. */
 export function parseConfig(value: unknown): GameConfig | null {
   if (!value || typeof value !== 'object') return null;
-  const { mode, scope, timeLimitSec } = value as Record<string, unknown>;
+  const { topic, mode, scope, timeLimitSec } = value as Record<string, unknown>;
+  if (topic !== undefined && !TOPICS.includes(topic as Topic)) return null;
   if (!BOARD_MODES.includes(mode as Mode)) return null;
   if (!scope || typeof scope !== 'object') return null;
   const { continents, subregions } = scope as Record<string, unknown>;
@@ -65,5 +73,5 @@ export function parseConfig(value: unknown): GameConfig | null {
   const limitOk = timeLimitSec === null || (Number.isInteger(timeLimitSec) && (timeLimitSec as number) >= 60 && (timeLimitSec as number) <= 3600);
   if (!limitOk) return null;
   const clean: Scope = { continents: continents as Continent[], subregions };
-  return { mode: mode as Mode, scope: clean, timeLimitSec: timeLimitSec as number | null };
+  return { ...(topic && topic !== 'countries' ? { topic: topic as Topic } : {}), mode: mode as Mode, scope: clean, timeLimitSec: timeLimitSec as number | null };
 }

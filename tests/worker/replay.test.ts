@@ -218,3 +218,16 @@ it('replays a long hint log in linear time', () => {
   const long = time(hints(20_000));
   expect(long / short).toBeLessThan(60);
 });
+
+describe('other topics replay', () => {
+  it('flags · identify: picks by click, wrong picks may be outside the region', () => {
+    const config = cfg({ topic: 'flags', mode: 'identify' });
+    let wrongOnce = false;
+    const log = play(config, (s, now) => (wrongOnce ? { type: 'click', id: target(s)!, now } : ((wrongOnce = true), { type: 'click', id: 'ROU', now })));
+    expect(verdict(config, log)).toMatchObject({ found: 12, reason: null });
+  });
+  it('capitals · type ranks like countries · type', () => {
+    const config = cfg({ topic: 'capitals' });
+    expect(verdict(config, play(config, typeAll))).toMatchObject({ found: 12, reason: null });
+  });
+});

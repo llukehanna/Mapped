@@ -1,5 +1,6 @@
-import { HINT_LEVELS } from './hints.ts';
+import { COUNTRY } from '../data/lookup.ts';
 import { toLogged } from './log.ts';
+import { hintLevels, rulesFor } from './topics.ts';
 import type { EndReason, GameAction, GameConfig, GameEvent, GameState, Mode } from './types.ts';
 
 export const TRIES_PER_TARGET = 3;
@@ -30,7 +31,7 @@ export function elapsed(state: GameState, now: number): number {
 }
 
 /** Current locate/identify target, or null. */
-export const target = (state: GameState): string | null => (state.config.mode === 'type' ? null : (state.queue[0] ?? null));
+export const target = (state: GameState): string | null => (rulesFor(state.config).ordered ? (state.queue[0] ?? null) : null);
 
 const emit = (state: GameState, event: GameEvent): GameState['event'] => ({ ...event, seq: (state.event?.seq ?? 0) + 1 });
 
@@ -58,14 +59,14 @@ function advance(state: GameState, now: number): GameState {
 
 function markFound(state: GameState, id: string, now: number, corrected = false): GameState {
   if (!state.pool.includes(id) || state.found.includes(id)) return state;
-  if (state.config.mode !== 'type' && id !== target(state)) return state;
+  if (rulesFor(state.config).ordered && id !== target(state)) return state;
   const next: GameState = {
     ...state,
     found: [...state.found, id],
     hint: state.hint?.id === id ? null : state.hint,
     event: emit(state, corrected ? { kind: 'found', id, corrected } : { kind: 'found', id }),
   };
-  if (state.config.mode !== 'type') return advance(next, now);
+  if (rulesFor(state.config).ordered) return advance(next, now);
   return next.found.length === next.pool.length ? end(next, 'complete', now) : next;
 }
 
@@ -78,7 +79,7 @@ function giveHint(state: GameState, id: string): GameState {
   const goal = target(state);
   if (goal ? id !== goal : !state.pool.includes(id) || state.found.includes(id)) return state;
   const level = state.hint?.id === id ? state.hint.level + 1 : 1;
-  if (level > HINT_LEVELS[state.config.mode]) return state;
+  if (level > hintLevels(state.config)) return state;
   return { ...state, hint: { id, level }, hintsUsed: state.hintsUsed + 1, event: emit(state, { kind: 'hint', id, level }) };
 }
 
@@ -125,7 +126,7 @@ function step(state: GameState, action: GameAction): GameState {
       ...initialState(action.config),
       phase: 'playing',
       pool: action.pool,
-      queue: action.config.mode === 'type' ? [] : action.order,
+      queue: rulesFor(action.config).ordered ? action.order : [],
       runningSince: action.now,
       startedAt: action.now,
     };
@@ -143,7 +144,10 @@ function step(state: GameState, action: GameAction): GameState {
       return markFound(state, action.id, action.now, action.corrected);
     case 'click': {
       const goal = target(state);
-      if (state.config.mode !== 'locate' || !goal || !state.pool.includes(action.id)) return state;
+      const { answer } = rulesFor(state.config);
+      if (!goal || (answer !== 'click' && answer !== 'flag')) return state;
+      // Locate clicks land on the map, so they must be in the game. A flag pick may be any country (lookalikes come from anywhere).
+      if (answer === 'click' ? !state.pool.includes(action.id) : !COUNTRY.has(action.id)) return state;
       if (action.id === goal) return markFound(state, goal, action.now);
       const wrong = { ...state, triesLeft: state.triesLeft - 1, event: emit(state, { kind: 'wrong', id: action.id }) };
       return wrong.triesLeft > 0 ? wrong : reveal(wrong, goal, action.now);

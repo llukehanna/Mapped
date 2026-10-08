@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD_REGIONS, boardFor, boardLabel, compareRuns, parseBoard, parseConfig } from '../../src/game/ranking.ts';
+import { BOARD_REGIONS, boardFor, boardKey, boardLabel, compareRuns, parseBoard, parseConfig } from '../../src/game/ranking.ts';
 import type { GameConfig } from '../../src/game/types.ts';
 
 const cfg = (continents: string[], subregions: string[] = [], mode: GameConfig['mode'] = 'type'): GameConfig =>
@@ -20,7 +20,7 @@ describe('boards', () => {
   });
 
   it('parses and labels board ids', () => {
-    expect(parseBoard('identify:north-america')).toEqual({ mode: 'identify', region: 'north-america' });
+    expect(parseBoard('identify:north-america')).toEqual({ topic: 'countries', mode: 'identify', region: 'north-america' });
     expect(parseBoard('type:mars')).toBeNull();
     expect(parseBoard('type:world:x')).toBeNull();
     expect(boardLabel('type:world')).toBe('World · Type');
@@ -62,5 +62,31 @@ describe('parseConfig', () => {
     ]) {
       expect(parseConfig(bad)).toBeNull();
     }
+  });
+});
+
+describe('topics on boards', () => {
+  const europe = { continents: ['europe' as const], subregions: [] };
+  it('countries boards keep their keys; other topics are prefixed', () => {
+    expect(boardFor({ mode: 'type', scope: europe, timeLimitSec: null })).toBe('type:europe');
+    expect(boardFor({ topic: 'countries', mode: 'type', scope: europe, timeLimitSec: null })).toBe('type:europe');
+    expect(boardFor({ topic: 'flags', mode: 'identify', scope: europe, timeLimitSec: null })).toBe('flags:identify:europe');
+  });
+  it('parses and labels both shapes', () => {
+    expect(parseBoard('type:world')).toEqual({ topic: 'countries', mode: 'type', region: 'world' });
+    expect(parseBoard('capitals:locate:asia')).toEqual({ topic: 'capitals', mode: 'locate', region: 'asia' });
+    expect(parseBoard('countries:type:world')).toBeNull(); // countries never carries the prefix
+    expect(parseBoard('flags:type:mars')).toBeNull();
+    expect(boardLabel('flags:type:europe')).toBe('Europe · Flags · Type');
+    expect(boardLabel('type:europe')).toBe('Europe · Type');
+    expect(boardKey('countries', 'type', 'world')).toBe('type:world');
+    expect(boardKey('flags', 'type', 'world')).toBe('flags:type:world');
+  });
+  it('parseConfig keeps a valid topic, drops countries, and rejects unknown ones', () => {
+    const base = { mode: 'type', scope: { continents: [], subregions: [] }, timeLimitSec: null };
+    expect(parseConfig({ ...base, topic: 'flags' })).toMatchObject({ topic: 'flags' });
+    expect(parseConfig({ ...base, topic: 'countries' })).not.toHaveProperty('topic');
+    expect(parseConfig(base)).not.toHaveProperty('topic');
+    expect(parseConfig({ ...base, topic: 'rivers' })).toBeNull();
   });
 });

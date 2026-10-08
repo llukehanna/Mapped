@@ -27,6 +27,12 @@ describe('bests', () => {
     expect(bestKey({ ...config, mode: 'locate', timeLimitSec: 600 })).toBe('mapped:best:v1:locate:africa,europe:600');
   });
 
+  it('keys bests by topic, leaving countries keys as they were', () => {
+    const world = { continents: [], subregions: [] };
+    expect(bestKey({ mode: 'type', scope: world, timeLimitSec: null })).toBe('mapped:best:v1:type:world:none');
+    expect(bestKey({ topic: 'flags', mode: 'type', scope: world, timeLimitSec: 600 })).toBe('mapped:best:v1:flags:type:world:600');
+  });
+
   it('ranks by found, then time, then hints', () => {
     expect(isBetter(r(90, 999_999), r(89, 1))).toBe(true);
     expect(isBetter(r(90, 500), r(90, 600))).toBe(true);

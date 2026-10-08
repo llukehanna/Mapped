@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BoardResponse, GameResult, MyGamesResponse, StartResponse } from '../../src/api/types.ts';
+import { target } from '../../src/game/reducer.ts';
 import type { GameConfig } from '../../src/game/types.ts';
 import type { D1Database, Env } from '../../worker/env.ts';
 import { MAX_CLAIMS_PER_REQUEST, STARTS_PER_HOUR, UNCLAIMED_KEEP_DAYS } from '../../worker/games.ts';
@@ -31,6 +32,16 @@ async function playGame(cookie?: string, { step = 2000, moves = typeAll, config 
 }
 
 const board = async (cookie?: string, path = 'type/south-america'): Promise<BoardResponse> => (await call(env, 'GET', `/api/boards/${path}`, { cookie })).json();
+
+it('a flags game goes on its own board', async () => {
+  const ana = await signIn(env, 'ana@example.com', 'meridian');
+  const config: GameConfig = { ...SOUTH_AMERICA, topic: 'flags' };
+  const game = await start(ana, config);
+  expect(game.board).toBe('flags:type:south-america');
+  const log = play(config, game.seed, (s, now) => ({ type: 'found', id: target(s)!, now }));
+  const res = await call(env, 'POST', `/api/games/${game.id}/finish`, { cookie: ana, body: { log } });
+  expect(await res.json()).toMatchObject({ ranked: true, board: 'flags:type:south-america', best: { rank: 1 } });
+});
 
 describe('starting a game', () => {
   it('returns an id, a seed and the board; a claim token only when signed out', async () => {
