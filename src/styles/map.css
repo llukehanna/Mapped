@@ -16,6 +16,8 @@
 .shape.territory { fill: var(--territory); stroke: var(--border-off); pointer-events: none; }
 .shape.dep { pointer-events: none; }
 .map.locating .shape.todo:hover, .map.locating .shape.found:hover { fill: var(--land-hover); }
+.map.picking .shape.todo:hover { fill: var(--land-hover); cursor: pointer; }
+.map.picking .marker-hit { cursor: pointer; }
 .map.reviewing .shape.missed:hover { stroke: var(--ink); stroke-width: 1.4; }
 
 .hatch-bg { fill: var(--missed); }

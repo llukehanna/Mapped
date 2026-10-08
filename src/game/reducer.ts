@@ -1,6 +1,6 @@
 import { HINT_LEVELS } from './hints.ts';
 import { toLogged } from './log.ts';
-import type { EndReason, GameAction, GameConfig, GameEvent, GameState } from './types.ts';
+import type { EndReason, GameAction, GameConfig, GameEvent, GameState, Mode } from './types.ts';
 
 export const TRIES_PER_TARGET = 3;
 
@@ -73,9 +73,24 @@ function reveal(state: GameState, id: string, now: number): GameState {
   return advance({ ...state, missed: [...state.missed, id], event: emit(state, { kind: 'revealed', id }) }, now);
 }
 
-/** Climbs the hint ladder for the current target (locate/identify) or for a missing country (type). */
-function giveHint(state: GameState, rand: number): GameState {
-  const top = HINT_LEVELS[state.config.mode];
+/** Climbs the hint ladder for `id`: the current target (locate/identify) or a missing country the player chose (type). */
+function giveHint(state: GameState, id: string): GameState {
+  const goal = target(state);
+  if (goal ? id !== goal : !state.pool.includes(id) || state.found.includes(id)) return state;
+  const level = state.hint?.id === id ? state.hint.level + 1 : 1;
+  if (level > HINT_LEVELS[state.config.mode]) return state;
+  return { ...state, hint: { id, level }, hintsUsed: state.hintsUsed + 1, event: emit(state, { kind: 'hint', id, level }) };
+}
+
+/** The ladder before hints were chosen: six rungs for naming modes. */
+const LEGACY_LEVELS: Record<Mode, number> = { type: 6, identify: 6, locate: 3 };
+
+/**
+ * Hints from clients before the player chose the country: type mode climbed one country and then moved on to another at
+ * random. Kept so games from tabs still on that version replay on the server.
+ */
+function giveLegacyHint(state: GameState, rand: number): GameState {
+  const top = LEGACY_LEVELS[state.config.mode];
   const climb = (id: string, level: number): GameState => ({
     ...state,
     hint: { id, level },
@@ -87,7 +102,6 @@ function giveHint(state: GameState, rand: number): GameState {
     if (state.hint?.id !== goal) return climb(goal, 1);
     return state.hint.level < top ? climb(goal, state.hint.level + 1) : state;
   }
-  // Type mode: keep climbing the same country; past the top rung, start over on a new one.
   if (state.hint && state.hint.level < top) return climb(state.hint.id, state.hint.level + 1);
   const found = new Set(state.found);
   const unfound = state.pool.filter((id) => !found.has(id));
@@ -139,7 +153,7 @@ function step(state: GameState, action: GameAction): GameState {
       return goal ? reveal(state, goal, action.now) : state;
     }
     case 'hint':
-      return giveHint(state, action.rand);
+      return 'id' in action ? giveHint(state, action.id) : giveLegacyHint(state, action.rand);
     case 'pause':
       return { ...state, phase: 'paused', elapsedMs: elapsed(state, action.now), runningSince: null };
     case 'tick': {

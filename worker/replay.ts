@@ -21,6 +21,7 @@ function parseAction(value: unknown): LoggedAction | null {
     case 'click':
       return isId(a.id) ? { type: 'click', id: a.id } : null;
     case 'hint':
+      if (isId(a.id)) return { type: 'hint', id: a.id };
       return typeof a.rand === 'number' && a.rand >= 0 && a.rand < 1 ? { type: 'hint', rand: a.rand } : null;
     case 'skip':
     case 'pause':

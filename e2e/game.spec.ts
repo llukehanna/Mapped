@@ -93,20 +93,33 @@ test('there is no pause: Esc and Give up ask in one central dialog while the clo
   await expect(page.locator('.review-bar')).toBeVisible();
 });
 
-test('hints climb a ladder of clues and zoom to the country', async ({ page }) => {
+test('type mode: hints are for the country you pick, a letter at a time', async ({ page }) => {
   await openSetup(page);
+  await page.getByRole('button', { name: /^S\. America/ }).click();
   await start(page);
-  const before = await page.locator('svg.map > g').first().getAttribute('transform');
   const input = page.getByLabel('Country name');
-  await input.pressSequentially('?');
   const card = page.getByRole('region', { name: 'Hints' });
-  await expect(card).toContainText('1/6');
-  await expect(card.locator('li')).toHaveCount(1);
-  await expect(input).toHaveValue('');
-  await expect.poll(async () => page.locator('svg.map > g').first().getAttribute('transform')).not.toBe(before);
+  // Nothing picked: Hint asks for a pick, and the pick gets the hint.
   await input.pressSequentially('?');
-  await expect(card.locator('li')).toHaveCount(2);
-  await expect(card.locator('li').nth(1)).toHaveText(/^(Borders|Nearest countries)/);
+  await expect(page.getByRole('status').filter({ hasText: "Click a country you haven't found" })).toBeVisible();
+  await expect(card).toBeHidden();
+  await clickCountry(page, 'BRA');
+  await expect(card).toContainText('1/4');
+  await expect(card.locator('li')).toHaveText(['Starts with B']);
+  await input.pressSequentially('?');
+  await expect(card.locator('li').nth(1)).toHaveText('B _ _ _ _ _ · 6 letters');
+  await card.getByRole('button', { name: /Another hint/ }).click();
+  await expect(card.locator('li').nth(2)).toHaveText('B _ _ _ _ l');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/desktop.png` });
+  await expect(input).toHaveValue('');
+  // Picking another country switches the card to it, free until asked.
+  await clickCountry(page, 'PER');
+  await expect(card).toContainText('0/4');
+  await card.getByRole('button', { name: /Get a hint/ }).click();
+  await expect(card.locator('li')).toHaveText(['Starts with P']);
+  // Finding it clears the pick.
+  await input.pressSequentially('peru');
+  await expect(card).toBeHidden();
 });
 
 test('Greenland fills in with Denmark', async ({ page }) => {

@@ -3,11 +3,14 @@ interface HintCardProps {
   clues: readonly string[];
   /** rungs on this mode's ladder */
   levels: number;
+  /** type: a country is picked on the map, so the card shows even before its first clue */
+  picked: boolean;
+  onHint: () => void;
 }
 
-/** The clues revealed for the hinted country, stacked above the input. The newest is emphasized. */
-export function HintCard({ clues, levels }: HintCardProps) {
-  if (!clues.length) return null;
+/** The clues revealed for the country being asked about, stacked above the input. The newest is emphasized. */
+export function HintCard({ clues, levels, picked, onHint }: HintCardProps) {
+  if (!clues.length && !picked) return null;
   return (
     <section className="hint-card glass" aria-label="Hints">
       <div className="hint-head label">
@@ -16,17 +19,21 @@ export function HintCard({ clues, levels }: HintCardProps) {
           {clues.length}/{levels}
         </span>
       </div>
-      <ol className="hint-list">
-        {clues.map((c, i) => (
-          <li key={i} className={i === clues.length - 1 ? 'newest' : ''}>
-            {c}
-          </li>
-        ))}
-      </ol>
+      {clues.length > 0 ? (
+        <ol className="hint-list">
+          {clues.map((c, i) => (
+            <li key={i} className={i === clues.length - 1 ? 'newest' : ''}>
+              {c}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="hint-empty mute">The outlined country. Click another to switch.</p>
+      )}
       {clues.length < levels && (
-        <div className="hint-more mute">
-          Press <kbd>?</kbd> for another clue
-        </div>
+        <button type="button" className="hint-more mute" onClick={onHint}>
+          {clues.length ? 'Another hint' : 'Get a hint'} <kbd>?</kbd>
+        </button>
       )}
     </section>
   );

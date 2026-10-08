@@ -58,6 +58,9 @@ export type GameAction =
   | { type: 'found'; id: string; now: number; corrected?: boolean }
   | { type: 'click'; id: string; now: number }
   | { type: 'skip'; now: number }
+  /** a hint for `id`, which the player chose (type) or is being asked about (locate/identify) */
+  | { type: 'hint'; id: string; now: number }
+  /** an old client's hint, for a country picked with `rand`; see giveLegacyHint */
   | { type: 'hint'; rand: number; now: number }
   | { type: 'pause'; now: number }
   | { type: 'resume'; now: number }
