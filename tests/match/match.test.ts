@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { COUNTRIES } from '../../src/data/countries.ts';
 import { TERRITORIES } from '../../src/data/territories.ts';
 import { matchSubmitted, matchTarget, matchTyped, type MatchContext } from '../../src/match/match.ts';
+import { CAPITAL_INDEX } from '../../src/match/capitalIndex.ts';
 import { buildIndex } from '../../src/match/nameIndex.ts';
 import { normalize } from '../../src/match/normalize.ts';
 
@@ -114,5 +115,23 @@ describe('index sanity', () => {
   it('has no empty keys', () => {
     expect(index.keys.every((k) => k.length > 0)).toBe(true);
     expect(normalize('')).toBe('');
+  });
+});
+
+describe('capitals', () => {
+  const cctx = (inScope: string[], found: string[] = []) => ({ index: CAPITAL_INDEX, inScope: new Set(inScope), found: new Set(found) });
+  it('a typed capital is its country', () => {
+    expect(matchTyped('nairobi', cctx(['KEN']))).toEqual({ kind: 'accept', id: 'KEN', corrected: false });
+    expect(matchTyped('la paz', cctx(['BOL']))).toEqual({ kind: 'accept', id: 'BOL', corrected: false });
+    expect(matchTyped('kiev', cctx(['UKR']))).toEqual({ kind: 'accept', id: 'UKR', corrected: false });
+  });
+  it('outside the region, already found, typos on Enter', () => {
+    expect(matchTyped('nairobi', cctx(['TZA']))).toEqual({ kind: 'outOfScope', id: 'KEN' });
+    expect(matchTyped('nairobi', cctx(['KEN'], ['KEN']))).toEqual({ kind: 'already', id: 'KEN' });
+    expect(matchSubmitted('nairobbi', cctx(['KEN']))).toEqual({ kind: 'accept', id: 'KEN', corrected: true });
+  });
+  it('identify: the target’s capital only', () => {
+    expect(matchTarget('Ottawa', 'CAN', CAPITAL_INDEX, false)).toBe('accept');
+    expect(matchTarget('Toronto', 'CAN', CAPITAL_INDEX, true)).toBe('wrong');
   });
 });

@@ -1,13 +1,9 @@
 import type { Facts } from '../data/facts.ts';
 import type { GeoMeta } from '../data/geoMeta.ts';
 import type { CountryDef } from '../data/types.ts';
-import type { Mode } from './types.ts';
-
-/**
- * Rungs on the hint ladder. Naming modes spell the name out a little at a time; locate (where the name is given) says
- * where, then near what, then circles it.
- */
-export const HINT_LEVELS: Record<Mode, number> = { type: 4, identify: 4, locate: 3 };
+import { capitalOf } from '../data/capitals.ts';
+import { rulesFor } from './topics.ts';
+import type { GameConfig, Mode } from './types.ts';
 
 export interface ClueInput {
   country: CountryDef;
@@ -62,4 +58,13 @@ export function clueText(mode: Mode, level: number, input: ClueInput): string {
   if (level === 1) return `Starts with ${name[0]}`;
   if (level === 2) return `${letterPattern(name, 'first')} · ${letterCount(name)}`;
   return letterPattern(name, level === 3 ? 'ends' : 'half');
+}
+
+/** The clue on rung `level` for any topic: letter rungs spell whatever the answer is (country or capital). */
+export function clueFor(config: Pick<GameConfig, 'mode' | 'topic'>, level: number, input: ClueInput): string {
+  const { answer } = rulesFor(config);
+  if (answer === 'click') return clueText('locate', level, input);
+  if (answer === 'flag') return level === 1 ? 'One wrong flag removed' : 'Two wrong flags removed';
+  const name = answer === 'capital' ? capitalOf(input.country.id) : input.country.name;
+  return clueText('identify', level, { ...input, country: { ...input.country, name } });
 }

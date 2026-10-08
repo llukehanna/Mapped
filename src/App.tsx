@@ -9,13 +9,14 @@ import { COUNTRY, nameOf } from './data/lookup.ts';
 import { TERRITORIES } from './data/territories.ts';
 import { formatClock, formatCountdown } from './game/format.ts';
 import { FACTS } from './data/facts.ts';
-import { clueText, HINT_LEVELS } from './game/hints.ts';
+import { clueFor } from './game/hints.ts';
 import type { LogEntry } from './game/log.ts';
 import { boardFor, parseBoard, type Board } from './game/ranking.ts';
 import { groupOf, progressRows } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
 import { isWorld, poolFor, scopeLabel, WORLD } from './game/scope.ts';
+import { hintLevels } from './game/topics.ts';
 import type { GameConfig } from './game/types.ts';
 import { rotationFor, type Rect } from './map/geometry.ts';
 import { useShapes } from './map/useShapes.ts';
@@ -52,8 +53,8 @@ const DEFAULT_CONFIG: GameConfig = { mode: 'type', scope: WORLD, timeLimitSec: n
 const INDEX = buildIndex(COUNTRIES, TERRITORIES);
 /** Territory shape → the country whose color it shares (Greenland → Denmark). */
 const OWNERS = new Map(TERRITORIES.flatMap((t) => (t.sovereign && t.geo ? [[t.id, t.sovereign] as const] : [])));
-const clue = (mode: GameConfig['mode'], level: number, id: string) =>
-  clueText(mode, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
+const clue = (config: GameConfig, level: number, id: string) =>
+  clueFor(config, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
 const storage = safeStorage();
 /** Wait before the one automatic retry of /finish after a network failure. */
 const FINISH_RETRY_MS = 800;
@@ -188,7 +189,7 @@ export function App() {
       setMapFlash({ id: e.id, kind: 'reveal', label: name, seq: e.seq });
       say(`That was ${name}`, 'warn');
     } else if (e.kind === 'hint') {
-      setAnnouncement(`Hint: ${clue(mode, e.level, e.id)}`);
+      setAnnouncement(`Hint: ${clue(state.config, e.level, e.id)}`);
       // Locate: show the target's region only, then close in for the circle.
       if (mode === 'locate' && e.level === 1) {
         const sub = COUNTRY.get(e.id)!.subregion;
@@ -484,8 +485,9 @@ export function App() {
   // Clues so far for the country being asked about (Type: the picked one; Locate/Identify: the current target).
   const asked = mode === 'type' ? pick : goal;
   const hinted = playing && state.hint && state.hint.id === asked ? state.hint : null;
+  const levels = hintLevels(state.config);
   // A game from before the ladder was shortened can be further up it than there are rungs now.
-  const clues = hinted ? Array.from({ length: Math.min(hinted.level, HINT_LEVELS[mode]) }, (_, i) => clue(mode, i + 1, hinted.id)) : [];
+  const clues = hinted ? Array.from({ length: Math.min(hinted.level, levels) }, (_, i) => clue(state.config, i + 1, hinted.id)) : [];
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
   const draftBoard = boardFor(draft);
 
@@ -626,7 +628,7 @@ export function App() {
             <Toast toast={toast} />
             <HintCard
               clues={clues}
-              levels={HINT_LEVELS[mode]}
+              levels={levels}
               picked={pick !== null}
               onHint={() => {
                 hint();

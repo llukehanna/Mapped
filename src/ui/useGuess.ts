@@ -1,8 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type Dispatch } from 'react';
+import { capitalOf } from '../data/capitals.ts';
 import { nameOf, TERRITORY } from '../data/lookup.ts';
+import { rulesFor } from '../game/topics.ts';
 import { target } from '../game/reducer.ts';
 import type { GameAction, GameState } from '../game/types.ts';
 import { matchSubmitted, matchTarget, matchTyped, type MatchContext, type MatchResult } from '../match/match.ts';
+import { CAPITAL_INDEX } from '../match/capitalIndex.ts';
 import type { NameIndex } from '../match/nameIndex.ts';
 import type { ToastMessage } from './Toast.tsx';
 
@@ -20,7 +23,7 @@ interface GuessOptions {
   onHint: () => void;
 }
 
-/** Input state and matching for Type and Identify modes. */
+/** Input state and matching for every game with a typed answer: country names, or capitals in Capitals. */
 export function useGuess({ state, dispatch, index, say, flash, onHint }: GuessOptions) {
   const [value, setValue] = useState('');
   const [shakeSeq, setShakeSeq] = useState(0);
@@ -37,20 +40,23 @@ export function useGuess({ state, dispatch, index, say, flash, onHint }: GuessOp
   }, [state.pool]);
   useEffect(() => () => window.clearTimeout(hold.current), []);
 
-  const context = (): MatchContext => ({ index, inScope: new Set(latest.current.pool), found: new Set(latest.current.found) });
+  /** Capitals games match what's typed against capitals; everything else against country names. */
+  const indexFor = (s: GameState) => (rulesFor(s.config).answer === 'capital' ? CAPITAL_INDEX : index);
+  const context = (): MatchContext => ({ index: indexFor(latest.current), inScope: new Set(latest.current.pool), found: new Set(latest.current.found) });
 
   /** Acts on a match. Returns true when the input should clear. */
   function handle(r: MatchResult): boolean {
+    const capitals = rulesFor(latest.current.config).answer === 'capital';
     switch (r.kind) {
       case 'accept':
         dispatch({ type: 'found', id: r.id, now: Date.now(), corrected: r.corrected });
         return true;
       case 'already':
-        say(`Already found: ${nameOf(r.id)}`, 'info');
+        say(`Already found: ${capitals ? capitalOf(r.id) : nameOf(r.id)}`, 'info');
         flash(r.id);
         return true;
       case 'outOfScope':
-        say(`${nameOf(r.id)} isn't in this quiz`, 'warn');
+        say(capitals ? `${capitalOf(r.id)} is ${nameOf(r.id)}'s capital, which isn't in this quiz` : `${nameOf(r.id)} isn't in this quiz`, 'warn');
         return true;
       case 'territory':
         say(`${nameOf(r.id)}: ${TERRITORY.get(r.id)!.note}`, 'info');
@@ -67,9 +73,9 @@ export function useGuess({ state, dispatch, index, say, flash, onHint }: GuessOp
     window.clearTimeout(hold.current);
     const s = latest.current;
     if (s.phase !== 'playing') return;
-    if (s.config.mode === 'identify') {
+    if (rulesFor(s.config).ordered) {
       const goal = target(s);
-      if (goal && matchTarget(next, goal, index, false) === 'accept') {
+      if (goal && matchTarget(next, goal, indexFor(s), false) === 'accept') {
         dispatch({ type: 'found', id: goal, now: Date.now() });
         setValue('');
       }
@@ -89,10 +95,10 @@ export function useGuess({ state, dispatch, index, say, flash, onHint }: GuessOp
     window.clearTimeout(hold.current);
     const s = latest.current;
     if (s.phase !== 'playing' || !value.trim()) return;
-    if (s.config.mode === 'identify') {
+    if (rulesFor(s.config).ordered) {
       const goal = target(s);
       if (!goal) return;
-      if (matchTarget(value, goal, index, true) === 'accept') dispatch({ type: 'found', id: goal, now: Date.now(), corrected: true });
+      if (matchTarget(value, goal, indexFor(s), true) === 'accept') dispatch({ type: 'found', id: goal, now: Date.now(), corrected: true });
       else setShakeSeq((n) => n + 1);
       setValue('');
       return;
