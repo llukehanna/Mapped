@@ -56,6 +56,23 @@ describe('unfinished runs rank too', () => {
     expect(verdict(config, log)).toMatchObject({ found: 11, reason: null });
   });
 
+  it('a pause straight into giving up (the old give-up dialog) does not count as pausing', () => {
+    const log = play(cfg(), (s, now) => (s.phase === 'paused' ? { type: 'giveUp', now: now + 20_000 } : s.found.length < 3 ? typeAll(s, now) : { type: 'pause', now }));
+    // The time runs to the give-up at 30 s, not the 8 s the clock froze at, as it does now that there is no pause.
+    expect(verdict(cfg(), log)).toMatchObject({ found: 3, ms: 30_000, reason: null });
+  });
+
+  it('a squashed log cannot hide behind a pause and a late give-up', () => {
+    const honest = play(cfg(), (s, now) => (s.phase === 'paused' ? { type: 'giveUp', now: now + 20_000 } : s.found.length < 3 ? typeAll(s, now) : { type: 'pause', now }));
+    const serverElapsedMs = honest.at(-1)!.t + 300;
+    // Finds squashed toward the start, the give-up left where the server saw it: the time still runs to the give-up.
+    const squashed = honest.map((e, i) => (i < honest.length - 1 ? { ...e, t: Math.floor(e.t / 4) } : e));
+    expect(verdict(cfg(), squashed, serverElapsedMs)).toMatchObject({ ms: 30_000 });
+    // Moving the give-up earlier too is caught by the server clock.
+    const early = squashed.map((e, i) => (i === squashed.length - 1 ? { ...e, t: 3000 } : e));
+    expect(verdict(cfg(), early, serverElapsedMs)).toMatchObject({ reason: 'unverified' });
+  });
+
   it('the per-country speed check counts only the countries found', () => {
     // 3 finds 2 s apart, then a quick give-up: 8 s over 3 found is fine, though it is under 0.3 s for each of the 12.
     const log = play(cfg(), (s, now) => (s.found.length < 3 ? typeAll(s, now) : { type: 'giveUp', now }));
@@ -74,8 +91,11 @@ describe('honest games that do not rank', () => {
     expect(verdict(cfg(), log)).toMatchObject({ found: 0, endReason: 'gaveUp', reason: 'incomplete' });
   });
 
-  it('pausing an unfinished run', () => {
-    const log = play(cfg(), (s, now) => (s.phase === 'paused' ? { type: 'giveUp', now } : s.found.length < 2 ? typeAll(s, now) : { type: 'pause', now }));
+  it('pausing, resuming, then giving up', () => {
+    let resumed = false;
+    const log = play(cfg(), (s, now) =>
+      s.phase === 'paused' ? ((resumed = true), { type: 'resume', now }) : resumed ? { type: 'giveUp', now } : s.found.length < 2 ? typeAll(s, now) : { type: 'pause', now },
+    );
     expect(verdict(cfg(), log)).toMatchObject({ found: 2, reason: 'paused' });
   });
 
