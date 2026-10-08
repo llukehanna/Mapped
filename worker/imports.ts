@@ -25,6 +25,8 @@ export async function importBests(req: Request, env: Env): Promise<Response> {
   for (const e of entries as Record<string, unknown>[]) {
     const config = parseConfig(e?.config);
     if (!config) continue;
+    // Only Countries games existed before accounts, so other topics are never imported.
+    if (config.topic) continue;
     const { found, total, ms, hints, at } = e;
     if (total !== poolFor(config.scope, COUNTRIES).length) continue;
     if (!intIn(found, 0, total) || !intIn(ms, 0, DAY_MS) || !intIn(hints, 0, 100_000)) continue;

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BoardResponse, GameResult, MyGamesResponse, StartResponse } from '../../src/api/types.ts';
 import { target } from '../../src/game/reducer.ts';
+import { BOARD_MODES, BOARD_REGIONS, BOARD_TOPICS, boardKey } from '../../src/game/ranking.ts';
 import type { GameConfig } from '../../src/game/types.ts';
 import type { D1Database, Env } from '../../worker/env.ts';
 import { MAX_CLAIMS_PER_REQUEST, STARTS_PER_HOUR, UNCLAIMED_KEEP_DAYS } from '../../worker/games.ts';
@@ -277,6 +278,33 @@ describe('leaderboards and your games', () => {
     expect(res.players).toBe(56);
     expect(res.you).toMatchObject({ rank: 56, name: 'meridian' });
     expect((await call(env, 'GET', '/api/boards/type/mars')).status).toBe(404);
+  });
+
+  it('your games: ranks every best in a fixed number of D1 queries, however many boards you have', async () => {
+    const boards = BOARD_TOPICS.flatMap((t) => BOARD_MODES.flatMap((m) => BOARD_REGIONS.map((r) => boardKey(t, m, r)))).slice(0, 60);
+    expect(boards).toHaveLength(60);
+    const now = Date.now();
+    const cookie = await signIn(env, 'ana@example.com', 'meridian');
+    const ana = (await db.prepare("SELECT id FROM users WHERE email = 'ana@example.com'").first<{ id: string }>())!.id;
+    const seed = (user: string, board: string, i: number, found: number) => [
+      db.prepare("INSERT INTO games (id, user_id, ip_hash, config, mode, scope_key, board, seed, started_at, finished_at, found, total, hints, ms, end_reason, ranked) VALUES (?, ?, 'h', '{}', 'type', 'world', ?, 1, ?, ?, ?, 100, 0, 5000, 'gaveUp', 1)").bind(`${user.slice(0, 8)}-g${i}`, user, board, now, now, found),
+      db.prepare("INSERT INTO bests (user_id, board, game_id, found, total, hints, ms, finished_at) VALUES (?, ?, ?, ?, 100, 0, 5000, ?)").bind(user, board, `${user.slice(0, 8)}-g${i}`, found, now),
+    ];
+    await db.batch([
+      db.prepare('INSERT INTO users (id, google_sub, email, name, name_key, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind('bo', 's-bo', 'bo@x.y', 'bo', 'bo', now),
+      ...boards.flatMap((b, i) => seed(ana, b, i, 50)),
+      ...seed('bo', boards[7], 7, 60), // bo found more on one board
+    ]);
+    // Count the D1 statements this request prepares: the free plan allows 50 per invocation.
+    let prepared = 0;
+    const counting: Env = { ...env, DB: { prepare: (sql) => (prepared++, db.prepare(sql)), batch: (list) => db.batch(list) } };
+    const res = await call(counting, 'GET', '/api/me/games', { cookie });
+    expect(res.status).toBe(200);
+    const mine: MyGamesResponse = await res.json();
+    expect(mine.bests).toHaveLength(60);
+    expect(mine.bests.filter((b) => b.rank === 2).map((b) => b.board)).toEqual([boards[7]]);
+    expect(mine.bests.filter((b) => b.rank === 1)).toHaveLength(59);
+    expect(prepared).toBeLessThan(10);
   });
 
   it('ranks most found first, then fewest hints, then fastest', async () => {

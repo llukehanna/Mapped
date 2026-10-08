@@ -92,6 +92,15 @@ describe('importing pre-accounts bests', () => {
     expect(await importCount(ana, 'nope')).toBe(0);
   });
 
+  it('imports Countries only: a flags or capitals entry is skipped', async () => {
+    const ana = await signIn(env, 'ana@example.com');
+    const flags = entry({ config: { ...EUROPE, topic: 'flags' }, at: JUNE + 1 });
+    const capitals = entry({ config: { ...EUROPE, topic: 'capitals' }, at: JUNE + 2 });
+    const explicit = entry({ config: { ...EUROPE, topic: 'countries' }, at: JUNE + 3 });
+    expect(await importCount(ana, [flags, capitals, explicit])).toBe(1);
+    expect((await myGames(ana)).recent.map((g) => g.topic)).toEqual(['countries']);
+  });
+
   it('processes at most 25 entries per request', async () => {
     const ana = await signIn(env, 'ana@example.com');
     const many = Array.from({ length: MAX_IMPORTS_PER_REQUEST + 5 }, (_, i) => entry({ at: JUNE + i }));
