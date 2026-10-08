@@ -117,6 +117,7 @@ kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--mute); bord
 .hint-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13.5px; color: var(--mute); }
 .hint-list li.newest { color: var(--ink); font-weight: 500; }
 .hint-list li.newest::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: middle; }
+.hint-list.spelled { font-family: var(--font-mono); font-size: 13px; }
 .hint-empty { margin: 0; font-size: 13.5px; }
 .hint-more { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; cursor: pointer; }
 .hint-more:hover { color: var(--ink); }
