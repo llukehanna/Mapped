@@ -20,6 +20,10 @@ export async function chooseSubregion(page: Page, name: string) {
   await page.getByRole('button', { name: new RegExp(`^${name} \\d+$`) }).click();
 }
 
+export async function chooseTopic(page: Page, topic: 'Countries' | 'Flags' | 'Capitals') {
+  await page.locator('.setup').getByRole('button', { name: topic, exact: true }).click();
+}
+
 export async function chooseMode(page: Page, mode: 'Type' | 'Locate' | 'Identify') {
   await page.getByRole('radio', { name: new RegExp(`^${mode}`) }).click();
 }

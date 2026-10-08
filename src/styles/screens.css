@@ -61,6 +61,11 @@
   .score, .clock { font-size: 17px; }
   .dock { bottom: calc(10px + var(--kb, 0px) + env(safe-area-inset-bottom)); }
   .zoom { display: none; }
+  .flag-card .flag { width: 160px; }
+  .flag-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flag-choice { padding: 5px; }
+  .flag-choice .flag { max-width: 120px; }
+  .flag-choice kbd { display: none; }
   .corner { top: calc(12px + env(safe-area-inset-top)); left: 14px; right: 14px; }
   .setup { top: auto; bottom: 0; right: 0; left: 0; width: auto; transform: none; max-height: 62dvh; border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); animation: sheet-in 380ms var(--ease); }
   @keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } }

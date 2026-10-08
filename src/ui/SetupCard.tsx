@@ -6,15 +6,23 @@ import { CONTINENTS, isWorld, poolFor, subregionsOf, WORLD } from '../game/scope
 import type { GameConfig, Mode, Scope } from '../game/types.ts';
 import type { BestSummary } from '../api/types.ts';
 import { boardFor, boardLabel } from '../game/ranking.ts';
+import { MODE_BLURB, TOPICS, TOPIC_LABEL, topicOf, type Topic } from '../game/topics.ts';
 import type { Result } from '../store/bests.ts';
 import { hintsText } from './accountText.ts';
 import { RankedTag } from './RankedTag.tsx';
 
-export const MODES: { id: Mode; label: string; blurb: string }[] = [
-  { id: 'type', label: 'Type', blurb: 'Name them all, any order' },
-  { id: 'locate', label: 'Locate', blurb: 'Click the named country' },
-  { id: 'identify', label: 'Identify', blurb: 'Name the lit-up country' },
+/** Blurbs depend on the topic: `MODE_BLURB`. */
+export const MODES: { id: Mode; label: string }[] = [
+  { id: 'type', label: 'Type' },
+  { id: 'locate', label: 'Locate' },
+  { id: 'identify', label: 'Identify' },
 ];
+
+/** Countries is the default, so it leaves `topic` off the config. */
+function withTopic(config: GameConfig, topic: Topic): GameConfig {
+  const { topic: _, ...rest } = config;
+  return topic === 'countries' ? rest : { ...rest, topic };
+}
 
 export const TIME_LIMITS: { sec: number | null; label: string }[] = [
   { sec: null, label: 'None' },
@@ -57,13 +65,25 @@ export function SetupCard({ config, best, serverBest, onChange, onStart }: Setup
   const scope = config.scope;
   const total = countIn(scope);
   const board = boardFor(config);
+  const topic = topicOf(config);
   const setScope = (update: (scope: Scope) => Scope) => onChange((c) => ({ ...c, scope: update(c.scope) }));
 
   return (
     <section className="setup glass" aria-label="Game setup">
       <div>
         <h1 className="setup-title">How well do you know the map?</h1>
-        <p className="mute setup-sub">Pick regions, a mode and a time limit.</p>
+        <p className="mute setup-sub">Pick a topic, regions, a mode and a time limit.</p>
+      </div>
+
+      <div>
+        <div className="label">Topic</div>
+        <div className="chips" role="group" aria-label="Topic">
+          {TOPICS.map((t) => (
+            <button key={t} type="button" className={`chip ${topic === t ? 'on' : ''}`} aria-pressed={topic === t} onClick={() => onChange((c) => withTopic(c, t))}>
+              {TOPIC_LABEL[t]}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>
@@ -123,7 +143,7 @@ export function SetupCard({ config, best, serverBest, onChange, onStart }: Setup
               onClick={() => onChange((c) => ({ ...c, mode: m.id }))}
             >
               <b>{m.label}</b>
-              <span>{m.blurb}</span>
+              <span>{MODE_BLURB[topic][m.id]}</span>
             </button>
           ))}
         </div>

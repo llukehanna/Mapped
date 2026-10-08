@@ -3,12 +3,15 @@ import { api, signInHref, type ApiError } from './api/client.ts';
 import { addClaim, migrateClaims, readClaims, removeClaims, saveResume, sessionStore, takeResume, type Run, type SaveState } from './api/resume.ts';
 import { useSession } from './api/session.ts';
 import { LOCAL_IMPORT_BEFORE, MAX_CLAIMS_PER_REQUEST, MAX_IMPORTS_PER_REQUEST, type BestSummary } from './api/types.ts';
+import { capitalOf } from './data/capitals.ts';
 import { COUNTRIES } from './data/countries.ts';
+import { flagSrc } from './data/flags.ts';
 import { GEO_META } from './data/geoMeta.ts';
 import { COUNTRY, nameOf } from './data/lookup.ts';
 import { TERRITORIES } from './data/territories.ts';
 import { formatClock, formatCountdown } from './game/format.ts';
 import { FACTS } from './data/facts.ts';
+import { flagChoices } from './game/flagChoices.ts';
 import { clueFor } from './game/hints.ts';
 import type { LogEntry } from './game/log.ts';
 import { boardFor, parseBoard, type Board } from './game/ranking.ts';
@@ -16,7 +19,7 @@ import { groupOf, progressRows } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
 import { isWorld, poolFor, scopeLabel, WORLD } from './game/scope.ts';
-import { hintLevels } from './game/topics.ts';
+import { hintLevels, rulesFor, TOPIC_LABEL, topicOf } from './game/topics.ts';
 import type { GameConfig } from './game/types.ts';
 import { rotationFor, type Rect } from './map/geometry.ts';
 import { useShapes } from './map/useShapes.ts';
@@ -38,6 +41,8 @@ import { shapeStates } from './ui/shapeStates.ts';
 import { Toast, type ToastMessage } from './ui/Toast.tsx';
 import { HintCard } from './ui/HintCard.tsx';
 import { DeleteAccount } from './ui/DeleteAccount.tsx';
+import { FlagCard } from './ui/FlagCard.tsx';
+import { FlagChoices } from './ui/FlagChoices.tsx';
 import { Leaderboard } from './ui/Leaderboard.tsx';
 import { NameCard } from './ui/NameCard.tsx';
 import { routePath, useRoute } from './ui/router.ts';
@@ -65,8 +70,8 @@ const NAME_ASKED = 'mapped:name-asked:v1';
 const SEED = Number(new URLSearchParams(window.location.search).get('seed')) || null;
 const random = SEED ? seededRandom(SEED) : Math.random;
 
-/** Where chrome doesn't cover the map, per screen. The map frames selections inside this. */
-function safeArea(phase: string, small: boolean, width: number, height: number, keyboard: number): Rect {
+/** Where chrome doesn't cover the map, per screen. The map frames selections inside this. `dock` is how much taller than an input the dock stands (a flag card, flag choices). */
+function safeArea(phase: string, small: boolean, width: number, height: number, keyboard: number, dock = 0): Rect {
   const box = (top: number, right: number, bottom: number, left: number): Rect => ({
     x: left,
     y: top,
@@ -76,11 +81,11 @@ function safeArea(phase: string, small: boolean, width: number, height: number, 
   if (small) {
     if (phase === 'setup') return box(56, 12, Math.round(height * 0.58), 12);
     if (phase === 'review') return box(64, 12, Math.round(height * 0.42), 12);
-    return box(64, 12, 84 + keyboard, 12);
+    return box(64, 12, 84 + dock + keyboard, 12);
   }
   if (phase === 'setup') return box(64, 470, 32, 32);
   if (phase === 'review') return box(84, 300, 28, 28);
-  return box(80, 32, 96, 32);
+  return box(80, 32, 96 + dock, 32);
 }
 
 export function App() {
@@ -109,6 +114,8 @@ export function App() {
   const [picked, setPicked] = useState<string | null>(null);
   /** Type: Hint was pressed with nothing picked, so the next pick gets the hint. */
   const [wantHint, setWantHint] = useState(false);
+  /** Flags · Identify: flags picked wrongly for the current target (keyed by game and target, so they reset as it moves on). */
+  const [wrongFlags, setWrongFlags] = useState<{ game: number | null; goal: string; ids: string[] } | null>(null);
   /** The "Give up?" dialog is open. The clock keeps running behind it. */
   const [confirming, setConfirming] = useState(false);
   const toastSeq = useRef(0);
@@ -135,8 +142,18 @@ export function App() {
 
   const playing = state.phase === 'playing';
   const mode = state.config.mode;
+  const topic = topicOf(state.config);
+  const rules = rulesFor(state.config);
   const goal = target(state);
-  const pick = playing && mode === 'type' && picked && !state.found.includes(picked) ? picked : null;
+  const pick = playing && !rules.ordered && picked && !state.found.includes(picked) ? picked : null;
+  /** Seeds the flag choices: the server's seed, or the start time for games played offline. */
+  const gameSeed = run?.seed ?? state.startedAt ?? 0;
+  const choices = useMemo(() => (goal && rules.answer === 'flag' ? flagChoices(goal, gameSeed) : []), [goal, rules.answer, gameSeed]);
+  const wrongPicks = wrongFlags && wrongFlags.game === state.startedAt && wrongFlags.goal === goal ? wrongFlags.ids : [];
+  // Each rung of the hint ladder takes away one more wrong flag, in the order they're shown.
+  const flagHints = goal && state.hint?.id === goal && rules.answer === 'flag' ? state.hint.level : 0;
+  const removedFlags = choices.filter((id) => id !== goal && !wrongPicks.includes(id)).slice(0, flagHints);
+  const disabledFlags = [...wrongPicks, ...removedFlags];
   const limitMs = state.config.timeLimitSec === null ? null : state.config.timeLimitSec * 1000;
   const spent = elapsed(state, now);
   const left = limitMs === null ? Infinity : limitMs - spent;
@@ -175,38 +192,50 @@ export function App() {
     const e = state.event;
     if (!e) return;
     const name = nameOf(e.id);
+    // Capitals: "Nairobi · Kenya"; otherwise the country.
+    const answerName = topic === 'capitals' ? `${capitalOf(e.id)} · ${name}` : name;
     if (e.kind === 'found') {
       flashJust(e.id);
       const group = groupOf(e.id, state.pool, COUNTRY);
       const row = progressRows(state.pool, state.found, COUNTRY).find((r) => r.label === group);
-      setAnnouncement(`${name}, found. ${state.found.length} of ${state.pool.length}.`);
-      if (e.corrected) say(`Accepted as ${name}`, 'good');
-      else if (mode === 'type') say(`${name}${row && row.total > 1 ? ` · ${group} ${row.found}/${row.total}` : ''}`, 'good');
+      const count = `${state.found.length} of ${state.pool.length}.`;
+      setAnnouncement(rules.answer === 'flag' ? `Correct: ${name}. ${count}` : `${answerName}, found. ${count}`);
+      if (e.corrected) say(`Accepted as ${answerName}`, 'good');
+      else if (topic !== 'countries') say(answerName, 'good');
+      else if (!rules.ordered) say(`${name}${row && row.total > 1 ? ` · ${group} ${row.found}/${row.total}` : ''}`, 'good');
     } else if (e.kind === 'wrong') {
       setMapFlash({ id: e.id, kind: 'wrong', label: name, seq: e.seq });
-      setAnnouncement(`No, that's ${name}.`);
+      setAnnouncement(rules.answer === 'flag' ? `No, that's ${name}'s flag.` : `No, that's ${name}.`);
     } else if (e.kind === 'revealed') {
       setMapFlash({ id: e.id, kind: 'reveal', label: name, seq: e.seq });
-      say(`That was ${name}`, 'warn');
+      say(topic === 'countries' ? `That was ${name}` : `It was ${answerName}`, 'warn');
     } else if (e.kind === 'hint') {
       setAnnouncement(`Hint: ${clue(state.config, e.level, e.id)}`);
-      // Locate: show the target's region only, then close in for the circle.
-      if (mode === 'locate' && e.level === 1) {
+      // Clicking answers: show the target's region only, then close in for the circle.
+      if (rules.answer === 'click' && e.level === 1) {
         const sub = COUNTRY.get(e.id)!.subregion;
         mapRef.current?.frameIds(COUNTRIES.filter((c) => c.subregion === sub).map((c) => c.id), 6);
       }
-      if (mode === 'locate' && e.level === 3) mapRef.current?.focus(e.id, 3);
+      if (rules.answer === 'click' && e.level === 3) mapRef.current?.focus(e.id, 3);
     }
   }, [state.event?.seq]);
 
-  // Identify: bring a tiny or off-screen target into view.
+  // Lit-up targets: bring a tiny or off-screen one into view.
   useEffect(() => {
-    if (mode !== 'identify' || state.phase !== 'playing' || !goal) return;
+    if (rules.prompt !== 'map' || state.phase !== 'playing' || !goal) return;
     const id = window.setTimeout(() => {
       if (!mapRef.current?.isVisible(goal, 10)) mapRef.current?.focus(goal, 6);
     }, 120);
     return () => window.clearTimeout(id);
-  }, [goal, mode, state.phase]);
+  }, [goal, rules.prompt, state.phase]);
+
+  // Flags: fetch the next target's flag (Identify: its four) while this one is played.
+  useEffect(() => {
+    if (state.phase !== 'playing' || topic !== 'flags') return;
+    const next = state.queue[1];
+    if (!next) return;
+    for (const id of rules.answer === 'flag' ? flagChoices(next, gameSeed) : [next]) new Image().src = flagSrc(id);
+  }, [state.queue[1], state.phase, topic, rules.answer, gameSeed]);
 
   // Entering review: save a local best if earned, and send the game to the server.
   useEffect(() => {
@@ -356,7 +385,7 @@ export function App() {
     starting.current = false;
     const pool = poolFor(config.scope, COUNTRIES);
     currentRun.current = online?.id ?? null;
-    setRun(online && { id: online.id, claim: online.claim, board: online.board });
+    setRun(online && { id: online.id, claim: online.claim, board: online.board, seed: online.seed });
     setSave(online ? null : { status: 'offline' });
     dispatch({ type: 'start', config, pool, order: shuffle(pool, online ? seededRandom(online.seed) : random), now: Date.now() });
     setNewBest(false);
@@ -365,15 +394,16 @@ export function App() {
     setArmed(null);
     setPicked(null);
     setWantHint(false);
+    setWrongFlags(null);
     setTip(null);
     setConfirming(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
-  /** Locate/identify: a hint about the target. Type: about the country picked on the map, or ask for a pick. */
+  /** One target at a time: a hint about it. Any order: about the country picked on the map, or ask for a pick. */
   const hint = () => {
-    const id = mode === 'type' ? pick : goal;
+    const id = rules.ordered ? goal : pick;
     if (id) return void dispatch({ type: 'hint', id, now: Date.now() });
-    if (mode !== 'type') return;
+    if (rules.ordered) return;
     setWantHint(true);
     say("Click a country you haven't found", 'info');
   };
@@ -396,7 +426,7 @@ export function App() {
       if (state.pool.includes(id)) mapRef.current?.focus(id, 8);
       return;
     }
-    if (state.phase === 'playing' && mode === 'type') {
+    if (state.phase === 'playing' && !rules.ordered) {
       if (!state.pool.includes(id) || state.found.includes(id)) return;
       setPicked(id);
       if (wantHint) {
@@ -405,7 +435,7 @@ export function App() {
       }
       return;
     }
-    if (state.phase !== 'playing' || mode !== 'locate') return;
+    if (state.phase !== 'playing' || rules.answer !== 'click') return;
     // On touch, a tap on something too small to hit reliably zooms first; a second tap answers.
     if (pointerType === 'touch' && armed !== id && !mapRef.current?.isVisible(id, 24)) {
       setArmed(id);
@@ -417,16 +447,24 @@ export function App() {
     dispatch({ type: 'click', id, now: Date.now() });
   }
 
-  // Keyboard: Esc give up, ? hint, S skip, + − 0 zoom, Enter start/replay, typing goes to the input.
+  /** Flags · Identify: a flag button or its number key. A wrong pick stays disabled for this target. */
+  function pickFlag(id: string) {
+    if (state.phase !== 'playing' || !goal || rules.answer !== 'flag' || disabledFlags.includes(id)) return;
+    if (id !== goal) setWrongFlags({ game: state.startedAt, goal, ids: [...wrongPicks, id] });
+    dispatch({ type: 'click', id, now: Date.now() });
+  }
+
+  // Keyboard: Esc give up, ? hint, S skip, 1–4 pick a flag, + − 0 zoom, Enter start/replay, typing goes to the input.
   const overlay = renderOverlay();
-  const keys = useRef({ state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, blocked: false });
+  const keys = useRef({ state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, choices, pickFlag, blocked: false });
   useLayoutEffect(() => {
-    keys.current = { state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, blocked: overlay !== null };
+    keys.current = { state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, choices, pickFlag, blocked: overlay !== null };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const { state: s, guess: g, start: go, hint: h, askGiveUp: ask, confirming: asking, cancelGiveUp: cancel, blocked } = keys.current;
+      const { state: s, guess: g, start: go, hint: h, askGiveUp: ask, confirming: asking, cancelGiveUp: cancel, choices: flags, pickFlag: pickF, blocked } =
+        keys.current;
       // A card is open over the map: it handles its own keys.
       if (blocked) return;
       const inField = e.target instanceof HTMLInputElement;
@@ -447,8 +485,11 @@ export function App() {
         e.preventDefault();
         return void h();
       }
-      const typing = s.config.mode !== 'locate';
+      const { answer } = rulesFor(s.config);
+      // Games answered by typing have an input; the others take single keys.
+      const typing = answer === 'country' || answer === 'capital';
       if (!typing && (e.key === 's' || e.key === 'S')) return void dispatch({ type: 'skip', now: Date.now() });
+      if (answer === 'flag' && /^[1-4]$/.test(e.key) && flags[Number(e.key) - 1]) return void pickF(flags[Number(e.key) - 1]);
       if (!inField) {
         if (e.key === '+' || e.key === '=') return void mapRef.current?.zoomBy(1.6);
         if (e.key === '-' || e.key === '_') return void mapRef.current?.zoomBy(1 / 1.6);
@@ -478,12 +519,12 @@ export function App() {
   const markers = useMemo(() => pool.filter((id) => GEO_META[id]?.tiny), [pool]);
   const highlights: Highlight[] = [];
   if (pick) highlights.push({ id: pick, kind: 'hint' });
-  if (goal && mode === 'identify' && state.phase === 'playing') highlights.push({ id: goal, kind: 'target' });
+  if (goal && rules.prompt === 'map' && state.phase === 'playing') highlights.push({ id: goal, kind: 'target' });
   if (mapFlash) highlights.push(mapFlash);
   if (hovered && state.phase === 'review') highlights.push({ id: hovered, kind: 'hover' });
-  const areaPulse = mode === 'locate' && (state.hint?.level ?? 0) >= 3 && state.phase === 'playing' ? state.hint!.id : null;
-  // Clues so far for the country being asked about (Type: the picked one; Locate/Identify: the current target).
-  const asked = mode === 'type' ? pick : goal;
+  const areaPulse = rules.answer === 'click' && (state.hint?.level ?? 0) >= 3 && state.phase === 'playing' ? state.hint!.id : null;
+  // Clues so far for the country being asked about (any order: the picked one; one at a time: the current target).
+  const asked = rules.ordered ? goal : pick;
   const hinted = playing && state.hint && state.hint.id === asked ? state.hint : null;
   const levels = hintLevels(state.config);
   // A game from before the ladder was shortened can be further up it than there are rungs now.
@@ -529,13 +570,28 @@ export function App() {
     if ((route.name === 'me' || route.name === 'signin') && !user) return <SignInCard onSignIn={beginSignIn} onClose={home} />;
     return null;
   }
-  const safe = safeArea(state.phase, small, size.width, size.height, keyboard);
+  // Flags games stack more in the dock: the flag card above the input, or the four choices.
+  const dockExtra = !playing ? 0 : rules.answer === 'flag' ? (small ? 190 : 130) : rules.prompt === 'flag' && rules.answer !== 'click' ? (small ? 160 : 200) : 0;
+  const safe = safeArea(state.phase, small, size.width, size.height, keyboard, dockExtra);
 
   const clock = limitMs === null ? formatClock(spent) : formatCountdown(limitMs - spent);
   const clockLevel = left <= 10_000 ? 'crit' : left <= 60_000 ? 'warn' : '';
   const rows = progressRows(state.pool, state.found, COUNTRY);
   const modeLabel = MODES.find((m) => m.id === mode)!.label;
-  const pill = `${scopeLabel(state.config.scope)} · ${modeLabel}`;
+  const pill = [scopeLabel(state.config.scope), ...(topic === 'countries' ? [] : [TOPIC_LABEL[topic]]), modeLabel].join(' · ');
+  const skip = () => dispatch({ type: 'skip', now: Date.now() });
+  // The dock's prompt for the current target, and how it's answered.
+  const locateGoal = rules.answer === 'click' ? goal : null;
+  const placeholder =
+    rules.answer === 'capital'
+      ? rules.ordered
+        ? 'Name its capital…'
+        : 'Type a capital…'
+      : rules.prompt === 'flag'
+        ? 'Type the country…'
+        : rules.prompt === 'map'
+          ? 'Name the highlighted country…'
+          : 'Type a country…';
 
   return (
     <div className={`app phase-${state.phase}`} style={{ '--kb': `${keyboard}px` } as CSSProperties}>
@@ -553,7 +609,7 @@ export function App() {
             markers={markers}
             highlights={highlights}
             areaPulse={areaPulse}
-            mode={state.phase === 'review' ? 'review' : !playing ? 'browse' : mode === 'locate' ? 'locate' : mode === 'type' ? 'pick' : 'browse'}
+            mode={state.phase === 'review' ? 'review' : !playing ? 'browse' : rules.answer === 'click' ? 'locate' : !rules.ordered ? 'pick' : 'browse'}
             reducedMotion={reducedMotion}
             onShapeClick={onShapeClick}
             onShapeHover={
@@ -635,26 +691,42 @@ export function App() {
                 inputRef.current?.focus();
               }}
             />
-            {mode === 'locate' && goal ? (
+            {locateGoal ? (
               <LocatePrompt
-                targetId={goal}
-                name={nameOf(goal)}
+                targetId={locateGoal}
+                label={rules.prompt === 'capital' ? 'Whose capital is' : 'Find'}
+                name={rules.prompt === 'capital' ? capitalOf(locateGoal) : nameOf(locateGoal)}
+                flagId={rules.prompt === 'flag' ? locateGoal : undefined}
                 triesLeft={state.triesLeft}
-                onSkip={() => dispatch({ type: 'skip', now: Date.now() })}
+                onSkip={skip}
               />
+            ) : rules.answer === 'flag' ? (
+              goal && (
+                <FlagChoices
+                  targetId={goal}
+                  ids={choices}
+                  disabled={disabledFlags}
+                  wrong={wrongPicks}
+                  triesLeft={state.triesLeft}
+                  onPick={pickFlag}
+                />
+              )
             ) : (
-              <GuessInput
-                ref={inputRef}
-                value={guess.value}
-                placeholder={mode === 'identify' ? 'Name the highlighted country…' : 'Type a country…'}
-                shakeSeq={guess.shakeSeq}
-                targetId={mode === 'identify' ? goal : null}
-                onChange={guess.onChange}
-                onSubmit={guess.onSubmit}
-              />
+              <>
+                {rules.prompt === 'flag' && goal && <FlagCard key={goal} id={goal} />}
+                <GuessInput
+                  ref={inputRef}
+                  value={guess.value}
+                  placeholder={placeholder}
+                  shakeSeq={guess.shakeSeq}
+                  targetId={rules.ordered ? goal : null}
+                  onChange={guess.onChange}
+                  onSubmit={guess.onSubmit}
+                />
+              </>
             )}
-            {mode === 'identify' && (
-              <button type="button" className="skip-link mute" onClick={() => dispatch({ type: 'skip', now: Date.now() })}>
+            {rules.ordered && rules.answer !== 'click' && (
+              <button type="button" className="skip-link mute" onClick={skip}>
                 Skip
               </button>
             )}

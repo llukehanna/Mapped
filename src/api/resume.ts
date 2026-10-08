@@ -23,6 +23,8 @@ export interface Run {
   id: string;
   claim: string | null;
   board: GameResult['board'];
+  /** the server's seed for this game (target order, flag choices); missing on reviews saved before v3 */
+  seed?: number;
 }
 
 export type SaveState =
