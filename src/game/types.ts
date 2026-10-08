@@ -1,5 +1,6 @@
 import type { Continent } from '../data/types.ts';
 import type { LogEntry } from './log.ts';
+import type { Topic } from './topics.ts';
 
 export type Mode = 'type' | 'locate' | 'identify';
 
@@ -10,6 +11,8 @@ export interface Scope {
 }
 
 export interface GameConfig {
+  /** missing = countries */
+  topic?: Topic;
   mode: Mode;
   scope: Scope;
   /** null = no limit (stopwatch counts up) */

@@ -1,5 +1,6 @@
 import { parseConfig } from '../game/ranking.ts';
 import { scopeFromKey, scopeKey } from '../game/scope.ts';
+import { topicOf } from '../game/topics.ts';
 import type { GameConfig } from '../game/types.ts';
 import { readJson, writeJson } from './storage.ts';
 
@@ -15,7 +16,8 @@ export interface Result {
 const BEST_PREFIX = 'mapped:best:v1:';
 
 export function bestKey(config: GameConfig): string {
-  return `${BEST_PREFIX}${config.mode}:${scopeKey(config.scope)}:${config.timeLimitSec ?? 'none'}`;
+  const topic = topicOf(config);
+  return `${BEST_PREFIX}${topic === 'countries' ? '' : `${topic}:`}${config.mode}:${scopeKey(config.scope)}:${config.timeLimitSec ?? 'none'}`;
 }
 
 /** More found wins, then a faster time, then fewer hints. */

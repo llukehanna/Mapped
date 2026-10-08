@@ -199,3 +199,43 @@ describe('identify mode', () => {
     expect(reduce(s, { type: 'found', id: 'ARG', now: 2000 }).found).toEqual([]);
   });
 });
+
+describe('topics', () => {
+  it('flags · type is ordered: one flag at a time, typed answers must be the target', () => {
+    let s = start({ topic: 'flags' }, ['CHL', 'ARG', 'BRA']);
+    expect(target(s)).toBe('CHL');
+    expect(reduce(s, { type: 'found', id: 'ARG', now: 2000 })).toBe(s);
+    s = reduce(s, { type: 'found', id: 'CHL', now: 2000 });
+    expect(target(s)).toBe('ARG');
+    s = reduce(s, { type: 'skip', now: 2500 });
+    expect(s.missed).toEqual(['ARG']);
+  });
+
+  it('flags · identify: a pick is a click; any country may be picked; wrong picks cost tries', () => {
+    let s = start({ topic: 'flags', mode: 'identify' }, ['CHL', 'ARG', 'BRA']);
+    s = reduce(s, { type: 'click', id: 'ROU', now: 2000 }); // a lookalike outside the pool
+    expect(s.triesLeft).toBe(TRIES_PER_TARGET - 1);
+    expect(reduce(s, { type: 'click', id: 'NOPE', now: 2100 })).toBe(s); // not a country
+    s = reduce(s, { type: 'click', id: 'CHL', now: 2200 });
+    expect(s.found).toEqual(['CHL']);
+  });
+
+  it('countries · identify still ignores clicks', () => {
+    const s = start({ mode: 'identify' });
+    expect(reduce(s, { type: 'click', id: 'ARG', now: 2000 })).toBe(s);
+  });
+
+  it('capitals · type is unordered like countries · type', () => {
+    const s = start({ topic: 'capitals' });
+    expect(target(s)).toBeNull();
+    expect(reduce(s, { type: 'found', id: 'BRA', now: 2000 }).found).toEqual(['BRA']);
+  });
+
+  it('hint ladders follow the topic', () => {
+    let s = start({ topic: 'flags', mode: 'identify' }, ['CHL', 'ARG', 'BRA']);
+    s = reduce(s, { type: 'hint', id: 'CHL', now: 2000 });
+    s = reduce(s, { type: 'hint', id: 'CHL', now: 2100 });
+    expect(s.hintsUsed).toBe(2);
+    expect(reduce(s, { type: 'hint', id: 'CHL', now: 2200 })).toBe(s);
+  });
+});
