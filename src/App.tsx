@@ -628,6 +628,7 @@ export function App() {
               clues={clues}
               levels={HINT_LEVELS[mode]}
               picked={pick !== null}
+              spelled={mode !== 'locate'}
               onHint={() => {
                 hint();
                 inputRef.current?.focus();

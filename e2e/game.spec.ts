@@ -110,7 +110,6 @@ test('type mode: hints are for the country you pick, a letter at a time', async 
   await expect(card.locator('li').nth(1)).toHaveText('B _ _ _ _ _ · 6 letters');
   await card.getByRole('button', { name: /Another hint/ }).click();
   await expect(card.locator('li').nth(2)).toHaveText('B _ _ _ _ l');
-  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/desktop.png` });
   await expect(input).toHaveValue('');
   // Picking another country switches the card to it, free until asked.
   await clickCountry(page, 'PER');

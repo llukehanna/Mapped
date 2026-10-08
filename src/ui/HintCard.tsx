@@ -5,11 +5,13 @@ interface HintCardProps {
   levels: number;
   /** type: a country is picked on the map, so the card shows even before its first clue */
   picked: boolean;
+  /** the clues spell out the name, so set them in mono where blanks line up and can be counted */
+  spelled: boolean;
   onHint: () => void;
 }
 
 /** The clues revealed for the country being asked about, stacked above the input. The newest is emphasized. */
-export function HintCard({ clues, levels, picked, onHint }: HintCardProps) {
+export function HintCard({ clues, levels, picked, spelled, onHint }: HintCardProps) {
   if (!clues.length && !picked) return null;
   return (
     <section className="hint-card glass" aria-label="Hints">
@@ -20,7 +22,7 @@ export function HintCard({ clues, levels, picked, onHint }: HintCardProps) {
         </span>
       </div>
       {clues.length > 0 ? (
-        <ol className="hint-list">
+        <ol className={`hint-list${spelled ? ' spelled' : ''}`}>
           {clues.map((c, i) => (
             <li key={i} className={i === clues.length - 1 ? 'newest' : ''}>
               {c}
