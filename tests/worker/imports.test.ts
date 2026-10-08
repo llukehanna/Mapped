@@ -42,7 +42,7 @@ describe('importing pre-accounts bests', () => {
     expect(personal).toEqual([{ board: 'type:europe', found: 40, total: EUROPE_TOTAL, hints: 2, ms: 600_000, ranked: false }]);
     expect(recent).toEqual([
       expect.objectContaining({ mode: 'locate', scopeKey: 'Caribbean', found: 5, endReason: 'gaveUp', ranked: false, reason: 'imported', isBest: false, finishedAt: JUNE + 1000 }),
-      { id: expect.stringMatching(/^imp_/), mode: 'type', scopeKey: 'europe', found: 40, total: EUROPE_TOTAL, hints: 2, ms: 600_000, endReason: 'gaveUp', ranked: false, reason: 'imported', isBest: false, finishedAt: JUNE },
+      { id: expect.stringMatching(/^imp_/), topic: 'countries', mode: 'type', scopeKey: 'europe', found: 40, total: EUROPE_TOTAL, hints: 2, ms: 600_000, endReason: 'gaveUp', ranked: false, reason: 'imported', isBest: false, finishedAt: JUNE },
     ]);
   });
 

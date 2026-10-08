@@ -1,5 +1,6 @@
 import type { BestSummary, BoardResponse, BoardRow, MyGamesResponse, PersonalBest, RecentGame } from '../src/api/types.ts';
 import { parseBoard, type Board, type Run } from '../src/game/ranking.ts';
+import { topicOf } from '../src/game/topics.ts';
 import type { EndReason, Mode } from '../src/game/types.ts';
 import { currentUser, requireUser } from './auth.ts';
 import type { D1Database, Env } from './env.ts';
@@ -46,9 +47,8 @@ export async function bestOf(db: D1Database, userId: string, board: Board): Prom
   return { ...run, total: row.total, rank: row.name === null ? null : await rankOf(db, board, run) };
 }
 
-/** GET /api/boards/:mode/:region */
-export async function getBoard(req: Request, env: Env, mode: string, region: string): Promise<Response> {
-  const board = `${mode}:${region}`;
+/** GET /api/boards/:mode/:region (countries) or /api/boards/:topic/:mode/:region; `board` is the board key. */
+export async function getBoard(req: Request, env: Env, board: string): Promise<Response> {
   if (!parseBoard(board)) throw new HttpError(404, 'not_found', 'No such leaderboard.');
   const user = await currentUser(req, env);
   const [top, count] = await env.DB.batch([
@@ -90,7 +90,7 @@ export async function myGames(req: Request, env: Env): Promise<Response> {
        ) WHERE n = 1`,
     ).bind(user.id),
     env.DB.prepare(
-      `SELECT g.id, g.mode, g.scope_key, g.found, g.total, g.hints, g.ms, g.end_reason, g.ranked, g.unranked_reason, g.finished_at,
+      `SELECT g.id, g.config, g.mode, g.scope_key, g.found, g.total, g.hints, g.ms, g.end_reason, g.ranked, g.unranked_reason, g.finished_at,
               b.game_id IS NOT NULL AS is_best
        FROM games g LEFT JOIN bests b ON b.game_id = g.id
        WHERE g.user_id = ? AND g.finished_at IS NOT NULL ORDER BY g.finished_at DESC LIMIT 50`,
@@ -108,11 +108,12 @@ export async function myGames(req: Request, env: Env): Promise<Response> {
     })),
   );
   type GameRow = {
-    id: string; mode: Mode; scope_key: string; found: number; total: number; hints: number; ms: number;
+    id: string; config: string; mode: Mode; scope_key: string; found: number; total: number; hints: number; ms: number;
     end_reason: EndReason; ranked: number; unranked_reason: RecentGame['reason']; finished_at: number; is_best: number;
   };
   const games: RecentGame[] = (recent.results as GameRow[]).map((g) => ({
     id: g.id,
+    topic: topicOf(JSON.parse(g.config)),
     mode: g.mode,
     scopeKey: g.scope_key,
     found: g.found,

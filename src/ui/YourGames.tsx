@@ -2,18 +2,21 @@ import { useEffect, useState } from 'react';
 import { api, type ApiError } from '../api/client.ts';
 import type { MyGamesResponse, User } from '../api/types.ts';
 import { formatClock } from '../game/format.ts';
-import { BOARD_MODES, BOARD_REGIONS, regionLabel, type Board } from '../game/ranking.ts';
+import { BOARD_MODES, BOARD_REGIONS, boardKey, regionLabel, type Board } from '../game/ranking.ts';
 import { scopeFromKey, scopeLabel } from '../game/scope.ts';
+import { TOPIC_LABEL, type Topic } from '../game/topics.ts';
 import { hintsText, REASON_TEXT } from './accountText.ts';
 import { CenterCard } from './CenterCard.tsx';
 import { RankedTag } from './RankedTag.tsx';
 import { MODES } from './SetupCard.tsx';
+import { TopicTabs } from './TopicTabs.tsx';
 
 const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const modeLabel = (id: string) => MODES.find((m) => m.id === id)!.label;
 
 export function YourGames({ user, onBoard, onClose, onSignedOut }: { user: User; onBoard: (board: Board) => void; onClose: () => void; onSignedOut: () => void }) {
   const [data, setData] = useState<MyGamesResponse | 'error' | null>(null);
+  const [topic, setTopic] = useState<Topic>('countries');
   useEffect(() => {
     api.myGames().then(setData, (e: ApiError) => {
       if (e.status === 401) onSignedOut();
@@ -32,6 +35,7 @@ export function YourGames({ user, onBoard, onClose, onSignedOut }: { user: User;
         <>
           <div>
             <div className="label">Your bests</div>
+            <TopicTabs topic={topic} onPick={setTopic} />
             <div className="bests-grid">
               <span />
               {BOARD_MODES.map((m) => (
@@ -43,7 +47,7 @@ export function YourGames({ user, onBoard, onClose, onSignedOut }: { user: User;
                 <div key={r} className="bests-row">
                   <span className="mute">{regionLabel(r)}</span>
                   {BOARD_MODES.map((m) => {
-                    const board: Board = `${m}:${r}`;
+                    const board = boardKey(topic, m, r);
                     const b = personal.get(board);
                     const rank = b?.ranked ? ranks.get(board) : null;
                     return b ? (
@@ -73,7 +77,7 @@ export function YourGames({ user, onBoard, onClose, onSignedOut }: { user: User;
                   <li key={g.id}>
                     <span className="mute">{day(g.finishedAt)}</span>
                     <span>
-                      {scopeLabel(scopeFromKey(g.scopeKey))} · {modeLabel(g.mode)}
+                      {[scopeLabel(scopeFromKey(g.scopeKey)), ...(g.topic === 'countries' ? [] : [TOPIC_LABEL[g.topic]]), modeLabel(g.mode)].join(' · ')}
                     </span>
                     <span className="mono">
                       {g.found}/{g.total}

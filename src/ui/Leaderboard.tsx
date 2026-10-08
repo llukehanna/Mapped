@@ -3,9 +3,11 @@ import { api } from '../api/client.ts';
 import type { BoardResponse, BoardRow } from '../api/types.ts';
 import { formatClock } from '../game/format.ts';
 import { BOARD_MODES, BOARD_REGIONS, regionLabel, type Region } from '../game/ranking.ts';
+import type { Topic } from '../game/topics.ts';
 import type { Mode } from '../game/types.ts';
 import { CenterCard } from './CenterCard.tsx';
 import { MODES } from './SetupCard.tsx';
+import { TopicTabs } from './TopicTabs.tsx';
 
 const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
@@ -28,39 +30,41 @@ function Row({ row }: { row: BoardRow }) {
 }
 
 interface LeaderboardProps {
+  topic: Topic;
   mode: Mode;
   region: Region;
-  onPick: (mode: Mode, region: Region) => void;
+  onPick: (topic: Topic, mode: Mode, region: Region) => void;
   onClose: () => void;
 }
 
-export function Leaderboard({ mode, region, onPick, onClose }: LeaderboardProps) {
+export function Leaderboard({ topic, mode, region, onPick, onClose }: LeaderboardProps) {
   const [data, setData] = useState<BoardResponse | 'error' | null>(null);
   useEffect(() => {
     let live = true;
     setData(null);
-    api.board(mode, region).then(
+    api.board(topic, mode, region).then(
       (d) => live && setData(d),
       () => live && setData('error'),
     );
     return () => {
       live = false;
     };
-  }, [mode, region]);
+  }, [topic, mode, region]);
   const pinned = data && data !== 'error' && data.you && !data.rows.some((r) => r.you) ? data.you : null;
 
   return (
     <CenterCard label="Leaderboards" title="Leaderboards" wide onClose={onClose}>
+      <TopicTabs topic={topic} onPick={(t) => onPick(t, mode, region)} />
       <div className="seg board-modes" role="tablist" aria-label="Mode">
         {BOARD_MODES.map((m) => (
-          <button key={m} type="button" role="tab" aria-selected={m === mode} className={m === mode ? 'on' : ''} onClick={() => onPick(m, region)}>
+          <button key={m} type="button" role="tab" aria-selected={m === mode} className={m === mode ? 'on' : ''} onClick={() => onPick(topic, m, region)}>
             {MODES.find((x) => x.id === m)!.label}
           </button>
         ))}
       </div>
       <div className="chips" role="group" aria-label="Region">
         {BOARD_REGIONS.map((r) => (
-          <button key={r} type="button" className={`chip ${r === region ? 'on' : ''}`} aria-pressed={r === region} onClick={() => onPick(mode, r)}>
+          <button key={r} type="button" className={`chip ${r === region ? 'on' : ''}`} aria-pressed={r === region} onClick={() => onPick(topic, mode, r)}>
             {regionLabel(r)}
           </button>
         ))}

@@ -41,7 +41,8 @@
 .review { position: fixed; z-index: 15; right: 14px; top: calc(84px + env(safe-area-inset-top)); bottom: 74px; width: 260px; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--panel-bg); }
 .review-list { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 12px; margin: 0 -6px; padding: 0 6px; }
 .review-group-label { color: var(--missed); margin-bottom: 2px; }
-.review-item { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 6px; margin: 0 -6px; border-radius: 6px; font-size: 13.5px; }
+.review-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 4px 6px; margin: 0 -6px; border-radius: 6px; font-size: 13.5px; }
+.review-item .review-flag { width: 24px; flex: none; border-radius: 3px; }
 .review-item:hover, .review-item.on { background: color-mix(in srgb, var(--missed) 18%, transparent); color: var(--danger); }
 .review-perfect { color: var(--accent); margin: 0; }
 .review-legend { display: flex; gap: 14px; font-size: 11.5px; }

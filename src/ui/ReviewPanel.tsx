@@ -1,7 +1,11 @@
+import { capitalOf } from '../data/capitals.ts';
+import { flagSrc } from '../data/flags.ts';
 import { COUNTRY } from '../data/lookup.ts';
 import { groupOf } from '../game/progress.ts';
+import type { Topic } from '../game/topics.ts';
 
 interface ReviewPanelProps {
+  topic: Topic;
   pool: readonly string[];
   missed: readonly string[];
   hovered: string | null;
@@ -9,14 +13,17 @@ interface ReviewPanelProps {
   onPick: (id: string) => void;
 }
 
-export function ReviewPanel({ pool, missed, hovered, onHover, onPick }: ReviewPanelProps) {
+const MISSED_LABEL: Record<Topic, string> = { countries: 'Missed countries', flags: 'Missed flags', capitals: 'Missed capitals' };
+
+export function ReviewPanel({ topic, pool, missed, hovered, onHover, onPick }: ReviewPanelProps) {
   const groups = new Map<string, string[]>();
-  for (const id of [...missed].sort((a, b) => COUNTRY.get(a)!.name.localeCompare(COUNTRY.get(b)!.name))) {
+  const label = (id: string) => (topic === 'capitals' ? `${capitalOf(id)} · ${COUNTRY.get(id)!.name}` : COUNTRY.get(id)!.name);
+  for (const id of [...missed].sort((a, b) => label(a).localeCompare(label(b)))) {
     const g = groupOf(id, pool, COUNTRY);
     groups.set(g, [...(groups.get(g) ?? []), id]);
   }
   return (
-    <aside className="review glass" aria-label="Missed countries">
+    <aside className="review glass" aria-label={MISSED_LABEL[topic]}>
       <div className="label">Missed · {missed.length}</div>
       {missed.length === 0 ? (
         <p className="review-perfect">Every one. Nothing missed.</p>
@@ -38,7 +45,8 @@ export function ReviewPanel({ pool, missed, hovered, onHover, onPick }: ReviewPa
                   onBlur={() => onHover(null)}
                   onClick={() => onPick(id)}
                 >
-                  {COUNTRY.get(id)!.name}
+                  {topic === 'flags' && <img className="flag review-flag" src={flagSrc(id)} alt="" draggable={false} />}
+                  {label(id)}
                 </button>
               ))}
             </div>

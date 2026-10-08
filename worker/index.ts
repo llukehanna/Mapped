@@ -20,7 +20,8 @@ const ROUTES: [method: string, path: RegExp, handler: Handler][] = [
   ['POST', /^\/api\/games$/, startGame],
   ['POST', /^\/api\/games\/claim$/, claimGames],
   ['POST', /^\/api\/games\/([\w-]{1,64})\/finish$/, (req, env, [id]) => finishGame(req, env, id)],
-  ['GET', /^\/api\/boards\/([a-z]{1,10})\/([a-z-]{1,20})$/, (req, env, [mode, region]) => getBoard(req, env, mode, region)],
+  ['GET', /^\/api\/boards\/([a-z]{1,10})\/([a-z-]{1,20})$/, (req, env, [mode, region]) => getBoard(req, env, `${mode}:${region}`)],
+  ['GET', /^\/api\/boards\/([a-z]{1,10})\/([a-z]{1,10})\/([a-z-]{1,20})$/, (req, env, [topic, mode, region]) => getBoard(req, env, `${topic}:${mode}:${region}`)],
 ];
 
 /** Only /api/* reaches the Worker (assets.run_worker_first); everything else is static. */
