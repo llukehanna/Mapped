@@ -76,12 +76,13 @@ Hints still count against ranking. Ladders (each rung adds a line to the hint ca
 
 | Game | Ladder |
 |---|---|
-| Countries · * | Unchanged. |
-| Flags · Type | The Countries · Identify ladder for the target (where it is, borders, size, capital, first letters, …). |
-| Flags · Locate, Capitals · Locate | The Countries · Locate ladder for the target (3 rungs). |
+| Countries · * | Unchanged: Type/Identify spell out the country name over 4 rungs (starts with, first letter + count, first and last, every other letter); Locate has 3 (where, neighbors, circle on the map). |
+| Flags · Type | The 4 letter rungs, for the target country's name. |
+| Flags · Locate, Capitals · Locate | The 3 Locate rungs, for the target country. |
 | Flags · Identify | 2 rungs: each removes one wrong flag. |
-| Capitals · Type | For a country the player picks on the map (as Countries · Type): 1 "Capital of Kenya" (the country is shown), 2 "Starts with N", 3 "7 letters: N _ _ _ _ _ _", 4 "Nai…" (first half). |
-| Capitals · Identify | Rungs 2–4 of the Capitals · Type ladder (the country is already lit up). |
+| Capitals · Type, Capitals · Identify | The 4 letter rungs, for the capital's name. In Type, the player picks the country to hint on the map, as in Countries · Type. |
+
+The letter rungs are the existing `letterPattern`/`letterCount` helpers, applied to whichever name is the answer.
 
 ## Screens
 

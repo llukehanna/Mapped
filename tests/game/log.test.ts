@@ -18,13 +18,13 @@ describe('action log', () => {
   it('records each action that changed the game, with ms since the start', () => {
     let s = start();
     s = reduce(s, { type: 'found', id: 'BRA', now: 2500 });
-    s = reduce(s, { type: 'hint', rand: 0.4, now: 3000 });
+    s = reduce(s, { type: 'hint', id: 'CHL', now: 3000 });
     s = reduce(s, { type: 'pause', now: 3500 });
     s = reduce(s, { type: 'resume', now: 9000 });
     s = reduce(s, { type: 'found', id: 'ARG', now: 9500, corrected: true });
     expect(s.log).toEqual([
       { t: 1500, a: { type: 'found', id: 'BRA' } },
-      { t: 2000, a: { type: 'hint', rand: 0.4 } },
+      { t: 2000, a: { type: 'hint', id: 'CHL' } },
       { t: 2500, a: { type: 'pause' } },
       { t: 8000, a: { type: 'resume' } },
       { t: 8500, a: { type: 'found', id: 'ARG', corrected: true } },
@@ -71,6 +71,7 @@ describe('action log', () => {
       { type: 'found', id: 'BRA', now: 1700 },
       { type: 'found', id: 'BRA', now: 1700, corrected: true },
       { type: 'click', id: 'CHL', now: 1700 },
+      { type: 'hint', id: 'CHL', now: 1700 },
       { type: 'hint', rand: 0.25, now: 1700 },
       { type: 'skip', now: 1700 },
       { type: 'giveUp', now: 1700 },

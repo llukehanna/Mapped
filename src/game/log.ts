@@ -5,6 +5,7 @@ export type LoggedAction =
   | { type: 'found'; id: string; corrected?: boolean }
   | { type: 'click'; id: string }
   | { type: 'skip' }
+  | { type: 'hint'; id: string }
   | { type: 'hint'; rand: number }
   | { type: 'pause' }
   | { type: 'resume' }
@@ -25,7 +26,7 @@ export function toLogged(action: GameAction): LoggedAction | null {
     case 'click':
       return { type: 'click', id: action.id };
     case 'hint':
-      return { type: 'hint', rand: action.rand };
+      return 'id' in action ? { type: 'hint', id: action.id } : { type: 'hint', rand: action.rand };
     case 'skip':
     case 'pause':
     case 'resume':
@@ -47,7 +48,7 @@ export function toAction(entry: LogEntry, startedAt: number): GameAction {
     case 'click':
       return { type: 'click', id: a.id, now };
     case 'hint':
-      return { type: 'hint', rand: a.rand, now };
+      return 'id' in a ? { type: 'hint', id: a.id, now } : { type: 'hint', rand: a.rand, now };
     default:
       return { type: a.type, now };
   }

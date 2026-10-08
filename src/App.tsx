@@ -104,6 +104,10 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [newBest, setNewBest] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
+  /** Type: the missing country picked on the map for hints. */
+  const [picked, setPicked] = useState<string | null>(null);
+  /** Type: Hint was pressed with nothing picked, so the next pick gets the hint. */
+  const [wantHint, setWantHint] = useState(false);
   /** The "Give up?" dialog is open. The clock keeps running behind it. */
   const [confirming, setConfirming] = useState(false);
   const toastSeq = useRef(0);
@@ -126,11 +130,12 @@ export function App() {
     setToast({ text, tone, seq: toastSeq.current });
     setAnnouncement(text);
   };
-  const guess = useGuess({ state, dispatch, index: INDEX, say, flash: flashJust, onHint: () => dispatch({ type: 'hint', rand: random(), now: Date.now() }) });
+  const guess = useGuess({ state, dispatch, index: INDEX, say, flash: flashJust, onHint: () => hint() });
 
   const playing = state.phase === 'playing';
   const mode = state.config.mode;
   const goal = target(state);
+  const pick = playing && mode === 'type' && picked && !state.found.includes(picked) ? picked : null;
   const limitMs = state.config.timeLimitSec === null ? null : state.config.timeLimitSec * 1000;
   const spent = elapsed(state, now);
   const left = limitMs === null ? Infinity : limitMs - spent;
@@ -184,8 +189,7 @@ export function App() {
       say(`That was ${name}`, 'warn');
     } else if (e.kind === 'hint') {
       setAnnouncement(`Hint: ${clue(mode, e.level, e.id)}`);
-      // Type: show the hinted country. Locate: show its region only, then close in for the circle.
-      if (mode === 'type' && e.level === 1) mapRef.current?.focus(e.id, 5);
+      // Locate: show the target's region only, then close in for the circle.
       if (mode === 'locate' && e.level === 1) {
         const sub = COUNTRY.get(e.id)!.subregion;
         mapRef.current?.frameIds(COUNTRIES.filter((c) => c.subregion === sub).map((c) => c.id), 6);
@@ -358,11 +362,20 @@ export function App() {
     warned.current = null;
     setMenuOpen(false);
     setArmed(null);
+    setPicked(null);
+    setWantHint(false);
     setTip(null);
     setConfirming(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
-  const hint = () => dispatch({ type: 'hint', rand: random(), now: Date.now() });
+  /** Locate/identify: a hint about the target. Type: about the country picked on the map, or ask for a pick. */
+  const hint = () => {
+    const id = mode === 'type' ? pick : goal;
+    if (id) return void dispatch({ type: 'hint', id, now: Date.now() });
+    if (mode !== 'type') return;
+    setWantHint(true);
+    say("Click a country you haven't found", 'info');
+  };
   // Give up always goes through one central dialog. The clock keeps running while it's open.
   const askGiveUp = () => {
     setMenuOpen(false);
@@ -380,6 +393,15 @@ export function App() {
   function onShapeClick(id: string, pointerType: string) {
     if (state.phase === 'review') {
       if (state.pool.includes(id)) mapRef.current?.focus(id, 8);
+      return;
+    }
+    if (state.phase === 'playing' && mode === 'type') {
+      if (!state.pool.includes(id) || state.found.includes(id)) return;
+      setPicked(id);
+      if (wantHint) {
+        setWantHint(false);
+        dispatch({ type: 'hint', id, now: Date.now() });
+      }
       return;
     }
     if (state.phase !== 'playing' || mode !== 'locate') return;
@@ -454,14 +476,16 @@ export function App() {
   );
   const markers = useMemo(() => pool.filter((id) => GEO_META[id]?.tiny), [pool]);
   const highlights: Highlight[] = [];
-  if (state.hint && state.phase === 'playing' && mode === 'type') highlights.push({ id: state.hint.id, kind: 'hint' });
+  if (pick) highlights.push({ id: pick, kind: 'hint' });
   if (goal && mode === 'identify' && state.phase === 'playing') highlights.push({ id: goal, kind: 'target' });
   if (mapFlash) highlights.push(mapFlash);
   if (hovered && state.phase === 'review') highlights.push({ id: hovered, kind: 'hover' });
   const areaPulse = mode === 'locate' && (state.hint?.level ?? 0) >= 3 && state.phase === 'playing' ? state.hint!.id : null;
-  // Clues so far for the hinted country (Type: any missing country; Locate/Identify: the current target).
-  const hinted = state.hint && state.phase === 'playing' && (mode === 'type' || state.hint.id === goal) ? state.hint : null;
-  const clues = hinted ? Array.from({ length: hinted.level }, (_, i) => clue(mode, i + 1, hinted.id)) : [];
+  // Clues so far for the country being asked about (Type: the picked one; Locate/Identify: the current target).
+  const asked = mode === 'type' ? pick : goal;
+  const hinted = playing && state.hint && state.hint.id === asked ? state.hint : null;
+  // A game from before the ladder was shortened can be further up it than there are rungs now.
+  const clues = hinted ? Array.from({ length: Math.min(hinted.level, HINT_LEVELS[mode]) }, (_, i) => clue(mode, i + 1, hinted.id)) : [];
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
   const draftBoard = boardFor(draft);
 
@@ -527,7 +551,7 @@ export function App() {
             markers={markers}
             highlights={highlights}
             areaPulse={areaPulse}
-            mode={state.phase === 'review' ? 'review' : mode === 'locate' && playing ? 'locate' : 'browse'}
+            mode={state.phase === 'review' ? 'review' : !playing ? 'browse' : mode === 'locate' ? 'locate' : mode === 'type' ? 'pick' : 'browse'}
             reducedMotion={reducedMotion}
             onShapeClick={onShapeClick}
             onShapeHover={
@@ -600,7 +624,15 @@ export function App() {
           />
           <div className="dock">
             <Toast toast={toast} />
-            <HintCard clues={clues} levels={HINT_LEVELS[mode]} />
+            <HintCard
+              clues={clues}
+              levels={HINT_LEVELS[mode]}
+              picked={pick !== null}
+              onHint={() => {
+                hint();
+                inputRef.current?.focus();
+              }}
+            />
             {mode === 'locate' && goal ? (
               <LocatePrompt
                 targetId={goal}

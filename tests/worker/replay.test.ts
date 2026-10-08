@@ -27,6 +27,13 @@ describe('honest games rank', () => {
   it('identify, with hints along the way', () => {
     const config = cfg({ mode: 'identify' });
     let hinted = 0;
+    const log = play(config, (s, now) => (hinted++ % 3 === 0 ? { type: 'hint', id: target(s)!, now } : { type: 'found', id: target(s)!, now }));
+    expect(verdict(config, log)).toMatchObject({ found: 12, hints: 6, reason: null });
+  });
+
+  it('identify, with random hints from a tab still on the old version', () => {
+    const config = cfg({ mode: 'identify' });
+    let hinted = 0;
     const log = play(config, (s, now) => (hinted++ % 3 === 0 ? { type: 'hint', rand: 0.5, now } : { type: 'found', id: target(s)!, now }));
     expect(verdict(config, log)).toMatchObject({ found: 12, hints: 6, reason: null });
   });
@@ -176,6 +183,8 @@ describe('parseLog', () => {
       [{ t: 5, a: { type: 'teleport' } }],
       [{ t: 5, a: { type: 'hint', rand: 1 } }],
       [{ t: 5, a: { type: 'hint', rand: -0.1 } }],
+      [{ t: 5, a: { type: 'hint' } }],
+      [{ t: 5, a: { type: 'hint', id: 'TOOLONGID' } }],
       [{ t: 5.5, a: { type: 'skip' } }],
       [{ t: 9, a: { type: 'skip' } }, { t: 8, a: { type: 'skip' } }],
       [{ t: 5, a: { type: 'found', id: 'TOOLONGID' } }],

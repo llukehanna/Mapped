@@ -46,7 +46,7 @@ interface WorldMapProps {
   highlights: readonly Highlight[];
   /** locate hint level 2: a circle near (not exactly on) this country */
   areaPulse: string | null;
-  mode: 'browse' | 'locate' | 'review';
+  mode: 'browse' | 'pick' | 'locate' | 'review';
   reducedMotion: boolean;
   onShapeClick?: (id: string, pointerType: string) => void;
   onShapeHover?: (id: string | null, x: number, y: number) => void;
@@ -200,7 +200,7 @@ export function WorldMap(props: WorldMapProps) {
   return (
     <svg
       ref={svgRef}
-      className={`map ${mode === 'locate' ? 'locating' : mode === 'review' ? 'reviewing' : ''}`}
+      className={`map ${mode === 'locate' ? 'locating' : mode === 'pick' ? 'picking' : mode === 'review' ? 'reviewing' : ''}`}
       width={width}
       height={height}
       role="img"

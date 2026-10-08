@@ -222,7 +222,7 @@ describe('leaderboards and your games', () => {
     const bo = await signIn(env, 'bo@example.com', 'kestrel');
     const cy = await signIn(env, 'cy@example.com');
     let hinted = false;
-    await playGame(ana, { step: 1000, moves: (s, now) => (hinted ? typeAll(s, now) : ((hinted = true), { type: 'hint', rand: 0.5, now })) });
+    await playGame(ana, { step: 1000, moves: (s, now) => (hinted ? typeAll(s, now) : ((hinted = true), { type: 'hint', id: s.pool[0], now })) });
     await playGame(bo, { step: 3000 });
     await playGame(cy, { step: 500 });
     const res = await board(ana);
@@ -254,7 +254,7 @@ describe('leaderboards and your games', () => {
 
   it('ranks most found first, then fewest hints, then fastest', async () => {
     const findThen = (n: number, hint = false): Move => (s, now) =>
-      hint && s.hintsUsed === 0 ? { type: 'hint', rand: 0, now } : s.found.length < n ? typeAll(s, now) : { type: 'giveUp', now };
+      hint && s.hintsUsed === 0 ? { type: 'hint', id: s.pool.find((id) => !s.found.includes(id))!, now } : s.found.length < n ? typeAll(s, now) : { type: 'giveUp', now };
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     const bo = await signIn(env, 'bo@example.com', 'kestrel');
     const cy = await signIn(env, 'cy@example.com', 'osprey');

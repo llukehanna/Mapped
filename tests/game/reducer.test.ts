@@ -85,16 +85,36 @@ describe('timer', () => {
 });
 
 describe('hints in type mode', () => {
-  it('first hint picks an unfound country at level 1; more hints climb its ladder', () => {
-    let s = reduce(start(), { type: 'found', id: 'ARG', now: 2000 });
-    s = reduce(s, { type: 'hint', rand: 0.99, now: 5000 });
+  it('climbs the ladder of the country the player picked, up to the top rung', () => {
+    let s = start();
+    s = reduce(s, { type: 'hint', id: 'CHL', now: 5000 });
     expect(s.hint).toEqual({ id: 'CHL', level: 1 });
-    s = reduce(s, { type: 'hint', rand: 0, now: 5000 });
-    expect(s.hint).toEqual({ id: 'CHL', level: 2 });
+    expect(s.event).toMatchObject({ kind: 'hint', id: 'CHL', level: 1 });
+    for (let i = 0; i < 5; i++) s = reduce(s, { type: 'hint', id: 'CHL', now: 5000 });
+    expect(s.hint).toEqual({ id: 'CHL', level: 4 });
+    expect(s.hintsUsed).toBe(4);
+  });
+
+  it('picking another country starts its ladder over', () => {
+    let s = reduce(start(), { type: 'hint', id: 'CHL', now: 5000 });
+    s = reduce(s, { type: 'hint', id: 'BRA', now: 5000 });
+    expect(s.hint).toEqual({ id: 'BRA', level: 1 });
     expect(s.hintsUsed).toBe(2);
   });
 
-  it('after the top rung, the next hint moves on to a new country', () => {
+  it('ignores hints for found or out-of-scope countries', () => {
+    const s = reduce(start(), { type: 'found', id: 'ARG', now: 2000 });
+    expect(reduce(s, { type: 'hint', id: 'ARG', now: 5000 })).toBe(s);
+    expect(reduce(s, { type: 'hint', id: 'FRA', now: 5000 })).toBe(s);
+  });
+
+  it('finding the hinted country clears the hint', () => {
+    let s = reduce(start(), { type: 'hint', id: 'ARG', now: 5000 });
+    s = reduce(s, { type: 'found', id: 'ARG', now: 2000 });
+    expect(s.hint).toBeNull();
+  });
+
+  it('still replays old random hints: six rungs on one country, then a new one', () => {
     let s = start();
     for (let i = 0; i < 6; i++) s = reduce(s, { type: 'hint', rand: 0, now: 5000 });
     expect(s.hint).toEqual({ id: 'ARG', level: 6 });
@@ -103,10 +123,10 @@ describe('hints in type mode', () => {
     expect(s.hintsUsed).toBe(7);
   });
 
-  it('finding the hinted country clears the hint', () => {
-    let s = reduce(start(), { type: 'hint', rand: 0, now: 5000 });
-    s = reduce(s, { type: 'found', id: 'ARG', now: 2000 });
-    expect(s.hint).toBeNull();
+  it('a new hint past the shortened ladder changes nothing', () => {
+    let s = start();
+    for (let i = 0; i < 5; i++) s = reduce(s, { type: 'hint', rand: 0, now: 5000 });
+    expect(reduce(s, { type: 'hint', id: 'ARG', now: 5000 })).toBe(s);
   });
 });
 
@@ -155,10 +175,11 @@ describe('locate mode', () => {
     expect(s.missed.sort()).toEqual(['BRA', 'CHL']);
   });
 
-  it('hints target the current country and stop at the top rung (3 in locate)', () => {
-    let s = reduce(locate(), { type: 'hint', rand: 0.5, now: 5000 });
+  it('hints are only for the current country and stop at the top rung (3 in locate)', () => {
+    expect(reduce(locate(), { type: 'hint', id: 'ARG', now: 5000 }).hint).toBeNull();
+    let s = reduce(locate(), { type: 'hint', id: 'CHL', now: 5000 });
     expect(s.hint).toEqual({ id: 'CHL', level: 1 });
-    for (let i = 0; i < 4; i++) s = reduce(s, { type: 'hint', rand: 0.5, now: 5000 });
+    for (let i = 0; i < 4; i++) s = reduce(s, { type: 'hint', id: 'CHL', now: 5000 });
     expect(s.hint).toEqual({ id: 'CHL', level: 3 });
     expect(s.hintsUsed).toBe(3);
   });
