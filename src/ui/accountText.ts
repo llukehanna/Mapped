@@ -5,9 +5,13 @@ import { boardLabel, type Board } from '../game/ranking.ts';
 
 export const hintsText = (n: number) => `${n} hint${n === 1 ? '' : 's'}`;
 
+/** "0 hints · 14:07", or "139/197 · 31 hints · 22:46" when not everything was found. */
+export const runText = (r: { found: number; total: number; hints: number; ms: number }) =>
+  `${r.found < r.total ? `${r.found}/${r.total} · ` : ''}${hintsText(r.hints)} · ${formatClock(r.ms)}`;
+
 export const REASON_TEXT: Record<UnrankedReason, string> = {
   custom: 'custom regions',
-  incomplete: 'not complete',
+  incomplete: 'nothing found',
   paused: 'paused',
   unverified: "couldn't verify",
   anonymous: 'not signed in',
@@ -51,7 +55,7 @@ export function saveMessage(save: SaveState, signedIn: boolean): SaveMessage {
   const r = save.result;
   const label = r.board && boardLabel(r.board);
   if (r.reason === 'anonymous') {
-    const detail = r.wouldRank === null || !label ? `${hintsText(r.hints)} · ${formatClock(r.ms)}. Sign in to put it on the leaderboard.` : `${hintsText(r.hints)} · ${formatClock(r.ms)} would put you #${r.wouldRank} on ${label}.`;
+    const detail = r.wouldRank === null || !label ? `${runText(r)}. Sign in to put it on the leaderboard.` : `${runText(r)} would put you #${r.wouldRank} on ${label}.`;
     return msg('gold', 'Sign in to save this run', detail, { signIn: true, board: r.board });
   }
   if (!r.ranked && !signedIn) return msg('plain', 'Sign in to keep your games', `Unranked: ${REASON_TEXT[r.reason!]}.`, { signIn: true });
@@ -63,5 +67,5 @@ export function saveMessage(save: SaveState, signedIn: boolean): SaveMessage {
   }
   const b = r.best!;
   const rank = b.rank ? ` (#${b.rank})` : '';
-  return msg('plain', 'Saved', `Your best on ${label} stays ${hintsText(b.hints)} · ${formatClock(b.ms)}${rank}.`, { board: r.board });
+  return msg('plain', 'Saved', `Your best on ${label} stays ${runText(b)}${rank}.`, { board: r.board });
 }

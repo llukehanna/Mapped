@@ -17,6 +17,9 @@ function Row({ row }: { row: BoardRow }) {
         {row.name}
         {row.you && <span className="mute"> (you)</span>}
       </td>
+      <td className={`num mono ${row.found === row.total ? 'gold' : ''}`}>
+        {row.found}/{row.total}
+      </td>
       <td className={`num mono ${row.hints === 0 ? 'gold' : 'mute'}`}>{row.hints}</td>
       <td className="num mono">{formatClock(row.ms)}</td>
       <td className="num mute hide-sm">{day(row.finishedAt)}</td>
@@ -72,6 +75,7 @@ export function Leaderboard({ mode, region, onPick, onClose }: LeaderboardProps)
               <tr>
                 <th>#</th>
                 <th>Name</th>
+                <th className="num">Found</th>
                 <th className="num">Hints</th>
                 <th className="num">Time</th>
                 <th className="num hide-sm">Date</th>
@@ -84,7 +88,7 @@ export function Leaderboard({ mode, region, onPick, onClose }: LeaderboardProps)
               {pinned && (
                 <>
                   <tr className="gap" aria-hidden="true">
-                    <td colSpan={5}>···</td>
+                    <td colSpan={6}>···</td>
                   </tr>
                   <Row row={pinned} />
                 </>
@@ -94,7 +98,7 @@ export function Leaderboard({ mode, region, onPick, onClose }: LeaderboardProps)
         )}
       </div>
       <div className="card-foot mute">
-        <span>Fewest hints, then fastest. Complete, unpaused runs only.</span>
+        <span>Most found, then fewest hints, then fastest. Unpaused runs only.</span>
         {data && data !== 'error' && <span>{data.players} {data.players === 1 ? 'player' : 'players'}</span>}
       </div>
     </CenterCard>

@@ -51,6 +51,10 @@ Players can sign in with Google. Signed-in players' games are saved, and complet
 - Claims saved by the first version in sessionStorage are moved to localStorage on the next load.
 - Local bests are no longer left behind. The first time an account signs in on a browser, the bests saved there before accounts existed (before the v2 launch) are sent to POST /api/me/import, 25 at a time. They show in Your games as "Unranked: played before accounts". They are unverified, so they are never ranked: they can be your personal best in Your games (see below) but never reach a leaderboard. Repeats are ignored. An account can import at most 200 games, and the browser remembers which accounts it has imported for as a hash of the email.
 
+## Revisions after launch
+
+- Boards rank most countries found first, then fewest hints, then fastest, then earliest. Unfinished runs (given up, timed out, skipped) rank, behind every run that found more. A run that found nothing stays unranked (`incomplete`, shown as "nothing found"). The speed check is per country found. `bests` stores `found` and `total` (migration 0004). The leaderboard shows a Found column; its footer reads "Most found, then fewest hints, then fastest. Unpaused runs only."
+
 ## Architecture
 
 ```

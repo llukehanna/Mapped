@@ -102,8 +102,8 @@ describe('finishing a game', () => {
   it('signed in: ranks, becomes the best, and shows on the board', async () => {
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     const { result } = await playGame(ana);
-    expect(result).toMatchObject({ found: 12, total: 12, hints: 0, ms: 24_000, ranked: true, reason: null, newBest: true, best: { hints: 0, ms: 24_000, rank: 1 } });
-    expect((await board(ana)).rows).toEqual([{ rank: 1, name: 'meridian', hints: 0, ms: 24_000, finishedAt: expect.any(Number), you: true }]);
+    expect(result).toMatchObject({ found: 12, total: 12, hints: 0, ms: 24_000, ranked: true, reason: null, newBest: true, best: { found: 12, total: 12, hints: 0, ms: 24_000, rank: 1 } });
+    expect((await board(ana)).rows).toEqual([{ rank: 1, name: 'meridian', found: 12, total: 12, hints: 0, ms: 24_000, finishedAt: expect.any(Number), you: true }]);
   });
 
   it('a slower run is saved but the best stays', async () => {
@@ -121,7 +121,7 @@ describe('finishing a game', () => {
 
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     const claimed = await (await call(env, 'POST', '/api/games/claim', { cookie: ana, body: { claims: [{ id: game.id, claim: game.claim }] } })).json();
-    expect(claimed.results).toEqual([expect.objectContaining({ id: game.id, ranked: true, reason: null, newBest: true, best: { hints: 0, ms: 24_000, rank: 2 } })]);
+    expect(claimed.results).toEqual([expect.objectContaining({ id: game.id, ranked: true, reason: null, newBest: true, best: { found: 12, total: 12, hints: 0, ms: 24_000, rank: 2 } })]);
     expect((await board()).rows.map((r) => r.name)).toEqual(['kestrel', 'meridian']);
   });
 
@@ -240,7 +240,7 @@ describe('leaderboards and your games', () => {
       Array.from({ length: 55 }, (_, i) => [
         db.prepare('INSERT INTO users (id, google_sub, email, name, name_key, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(`u${i}`, `s${i}`, `${i}@x.y`, `player${i}`, `player${i}`, now),
         db.prepare("INSERT INTO games (id, user_id, ip_hash, config, mode, scope_key, board, seed, started_at, finished_at, found, total, hints, ms, end_reason, ranked) VALUES (?, ?, 'h', '{}', 'type', 'south-america', 'type:south-america', 1, ?, ?, 12, 12, 0, ?, 'complete', 1)").bind(`g${i}`, `u${i}`, now, now, 10_000 + i),
-        db.prepare("INSERT INTO bests (user_id, board, game_id, hints, ms, finished_at) VALUES (?, 'type:south-america', ?, 0, ?, ?)").bind(`u${i}`, `g${i}`, 10_000 + i, now),
+        db.prepare("INSERT INTO bests (user_id, board, game_id, found, total, hints, ms, finished_at) VALUES (?, 'type:south-america', ?, 12, 12, 0, ?, ?)").bind(`u${i}`, `g${i}`, 10_000 + i, now),
       ]).flat(),
     );
     const ana = await signIn(env, 'ana@example.com', 'meridian');
@@ -252,12 +252,36 @@ describe('leaderboards and your games', () => {
     expect((await call(env, 'GET', '/api/boards/type/mars')).status).toBe(404);
   });
 
+  it('ranks most found first, then fewest hints, then fastest', async () => {
+    const findThen = (n: number, hint = false): Move => (s, now) =>
+      hint && s.hintsUsed === 0 ? { type: 'hint', rand: 0, now } : s.found.length < n ? typeAll(s, now) : { type: 'giveUp', now };
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    const bo = await signIn(env, 'bo@example.com', 'kestrel');
+    const cy = await signIn(env, 'cy@example.com', 'osprey');
+    const di = await signIn(env, 'di@example.com', 'heron');
+    await playGame(ana, { moves: findThen(6, true), step: 1000 }); // 6 found, 1 hint, quick
+    await playGame(bo, { moves: findThen(6), step: 3000 }); // 6 found, no hints, slow
+    await playGame(cy, { moves: findThen(7, true), step: 4000 }); // 7 found beats everyone with 6
+    await playGame(di, { moves: findThen(6), step: 2000 }); // 6 found, no hints, quicker than kestrel
+    expect((await board()).rows.map((r) => [r.name, r.found, r.hints])).toEqual([
+      ['osprey', 7, 1],
+      ['heron', 6, 0],
+      ['kestrel', 6, 0],
+      ['meridian', 6, 1],
+    ]);
+    // A better run replaces your best even with more hints, because it found more.
+    const { result } = await playGame(bo, { moves: findThen(8, true) });
+    expect(result).toMatchObject({ newBest: true, best: { found: 8, hints: 1, rank: 1 } });
+    // Finding nothing never ranks.
+    expect((await playGame(ana, { moves: findThen(0) })).result).toMatchObject({ found: 0, ranked: false, reason: 'incomplete' });
+  });
+
   it('your games: bests with ranks, then recent games newest first', async () => {
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     await playGame(ana);
     await playGame(ana, { config: { ...SOUTH_AMERICA, scope: { continents: [], subregions: ['Caribbean'] } } });
     const mine: MyGamesResponse = await (await call(env, 'GET', '/api/me/games', { cookie: ana })).json();
-    expect(mine.bests).toEqual([{ board: 'type:south-america', hints: 0, ms: 24_000, rank: 1 }]);
+    expect(mine.bests).toEqual([{ board: 'type:south-america', found: 12, total: 12, hints: 0, ms: 24_000, rank: 1 }]);
     expect(mine.recent.map((g) => [g.scopeKey, g.ranked, g.reason, g.isBest])).toEqual([
       ['Caribbean', false, 'custom', false],
       ['south-america', true, null, true],
@@ -265,22 +289,28 @@ describe('leaderboards and your games', () => {
     expect((await call(env, 'GET', '/api/me/games')).status).toBe(401);
   });
 
-  it('your games: personal bests count unfinished runs, most found first, and prefer a ranked run', async () => {
+  it('your games: personal bests and ranks count unfinished runs, most found first', async () => {
     const ana = await signIn(env, 'ana@example.com', 'meridian');
     const findThen = (n: number, move = typeAll): Move => (s, now) => (s.found.length < n ? move(s, now) : { type: 'giveUp', now });
     await playGame(ana, { moves: findThen(3) });
     await playGame(ana, { moves: findThen(5), step: 3000 });
     await playGame(ana, { moves: findThen(2, clickTarget), config: { ...SOUTH_AMERICA, mode: 'locate' } });
     const mine: MyGamesResponse = await (await call(env, 'GET', '/api/me/games', { cookie: ana })).json();
-    expect(mine.bests).toEqual([]);
+    // Unfinished runs rank too: the best is the one that found more, though it was slower.
+    expect(mine.bests).toEqual(
+      expect.arrayContaining([
+        { board: 'type:south-america', found: 5, total: 12, hints: 0, ms: 18_000, rank: 1 },
+        { board: 'locate:south-america', found: 2, total: 12, hints: 0, ms: 6_000, rank: 1 },
+      ]),
+    );
     expect(mine.personal).toEqual(
       expect.arrayContaining([
-        { board: 'type:south-america', found: 5, total: 12, hints: 0, ms: 18_000, ranked: false },
-        { board: 'locate:south-america', found: 2, total: 12, hints: 0, ms: 6_000, ranked: false },
+        { board: 'type:south-america', found: 5, total: 12, hints: 0, ms: 18_000, ranked: true },
+        { board: 'locate:south-america', found: 2, total: 12, hints: 0, ms: 6_000, ranked: true },
       ]),
     );
     expect(mine.personal).toHaveLength(2);
-    // A complete, ranked run beats any unfinished one, and carries its leaderboard rank.
+    // A complete run beats any unfinished one.
     await playGame(ana);
     const after: MyGamesResponse = await (await call(env, 'GET', '/api/me/games', { cookie: ana })).json();
     expect(after.personal.find((p) => p.board === 'type:south-america')).toEqual({ board: 'type:south-america', found: 12, total: 12, hints: 0, ms: 24_000, ranked: true });
