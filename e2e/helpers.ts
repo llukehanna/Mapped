@@ -63,8 +63,8 @@ export async function asPlayer(page: Page) {
 }
 
 /** Types each name at a believable human pace, so the server ranks the run. */
-export async function typeLikeAPerson(page: Page, names: string[]) {
-  const input = page.getByLabel('Country name');
+export async function typeLikeAPerson(page: Page, names: string[], label = 'Country name') {
+  const input = page.getByLabel(label);
   for (const name of names) {
     await input.pressSequentially(name.toLowerCase(), { delay: 25 });
     await page.waitForTimeout(250);

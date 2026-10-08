@@ -4,17 +4,19 @@ interface GuessInputProps {
   ref?: Ref<HTMLInputElement>;
   value: string;
   placeholder: string;
+  /** the input's accessible name: "Country name", or "Capital" in Capitals games */
+  label?: string;
   /** shown at the right of the field, e.g. the current hint */
   aside?: string | null;
   /** increments on a rejected guess */
   shakeSeq: number;
-  /** identify mode: the country being asked about (for tests and tooling) */
+  /** one-at-a-time games: the current target country (for tests and tooling) */
   targetId?: string | null;
   onChange: (value: string) => void;
   onSubmit: () => void;
 }
 
-export function GuessInput({ ref, value, placeholder, aside, shakeSeq, targetId, onChange, onSubmit }: GuessInputProps) {
+export function GuessInput({ ref, value, placeholder, label = 'Country name', aside, shakeSeq, targetId, onChange, onSubmit }: GuessInputProps) {
   const [shaking, setShaking] = useState(false);
   useEffect(() => {
     if (!shakeSeq) return;
@@ -34,7 +36,7 @@ export function GuessInput({ ref, value, placeholder, aside, shakeSeq, targetId,
       <input
         ref={ref}
         className="guess-input"
-        aria-label="Country name"
+        aria-label={label}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
