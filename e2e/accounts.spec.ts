@@ -3,6 +3,11 @@ import { asPlayer, chooseTopic, openSetup, pickName, signInFromSetup, start, typ
 
 const SOUTH_AMERICA = ['Argentina', 'Bolivia', 'Brazil', 'Chile', 'Colombia', 'Ecuador', 'Guyana', 'Paraguay', 'Peru', 'Suriname', 'Uruguay', 'Venezuela'];
 
+const SOUTH_AMERICA_BY_ID: Record<string, string> = {
+  ARG: 'Argentina', BOL: 'Bolivia', BRA: 'Brazil', CHL: 'Chile', COL: 'Colombia', ECU: 'Ecuador',
+  GUY: 'Guyana', PRY: 'Paraguay', PER: 'Peru', SUR: 'Suriname', URY: 'Uruguay', VEN: 'Venezuela',
+};
+
 test('play signed out, sign in from the review: the game is claimed and on the board', async ({ page }) => {
   const errors = watchErrors(page);
   const player = await asPlayer(page);
@@ -73,13 +78,35 @@ test('the setup Leaderboards button opens the board for the chosen topic; Your g
   await page.keyboard.press('Escape');
   await signInFromSetup(page);
   await pickName(page, player.name);
+  // A real, short Flags game: S. America · Flags · Type, two found, then give up.
+  await chooseTopic(page, 'Flags');
+  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await start(page);
+  for (let i = 0; i < 2; i++) {
+    const id = (await page.locator('.guess').getAttribute('data-target-id'))!;
+    await typeLikeAPerson(page, [SOUTH_AMERICA_BY_ID[id]]);
+  }
+  await page.keyboard.press('Escape');
+  await page.getByRole('alertdialog', { name: 'Give up?' }).getByRole('button', { name: 'Give up' }).click();
+  await expect(page.locator('.savecard')).toContainText(/Saved · #\d+ on S\. America · Flags · Type/);
+  await page.getByRole('button', { name: 'Change setup' }).click();
   await page.locator('.namechip').click();
   await page.getByRole('menuitem', { name: 'Your games' }).click();
   const games = page.getByRole('dialog', { name: 'Your games' });
+  const cell = (name: string) => games.locator('.bests-row', { hasText: 'S. America' }).locator(name);
+  // Countries tab: nothing on the S. America row; the flags run is not read as a countries best.
   await expect(games.getByRole('tab', { name: 'Countries' })).toHaveAttribute('aria-selected', 'true');
+  await expect(games.locator('.best-cell:not(.none)')).toHaveCount(0);
+  // Flags tab: the run fills S. America · Type, and the cell opens the Flags board.
   await games.getByRole('tab', { name: 'Flags' }).click();
   await expect(games.getByRole('tab', { name: 'Flags' })).toHaveAttribute('aria-selected', 'true');
-  await expect(games.locator('.best-cell:not(.none)')).toHaveCount(0);
+  await expect(games.locator('.best-cell:not(.none)')).toHaveCount(1);
+  await expect(cell('.best-cell').first()).toContainText('2/12');
+  await expect(games.locator('.recent li')).toContainText('S. America · Flags · Type');
+  await cell('button.best-cell').first().click();
+  await expect(page).toHaveURL(/\/leaderboards\/flags\/type\/south-america$/);
+  await expect(page.getByRole('dialog', { name: 'Leaderboards' }).getByRole('tab', { name: 'Flags' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('dialog', { name: 'Leaderboards' }).locator('tr.you')).toContainText(player.name);
 });
 
 test('sign in from setup, then sign out', async ({ page }) => {
