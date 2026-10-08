@@ -1,7 +1,12 @@
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { COUNTRIES } from '../../src/data/countries.ts';
 import { FACTS, LANDLOCKED } from '../../src/data/facts.ts';
 import { TERRITORIES } from '../../src/data/territories.ts';
+import { CAPITALS, capitalOf } from '../../src/data/capitals.ts';
+import { FLAG_LOOKALIKES } from '../../src/data/flagLookalikes.ts';
+import { COUNTRY } from '../../src/data/lookup.ts';
+import { normalize } from '../../src/match/normalize.ts';
 
 describe('country data', () => {
   it('has the 197 countries Sporcle uses, each with a unique id', () => {
@@ -77,5 +82,35 @@ describe('hint facts', () => {
     const ids = new Set(COUNTRIES.map((c) => c.id));
     expect(LANDLOCKED.size).toBe(45);
     for (const id of LANDLOCKED) expect(ids, id).toContain(id);
+  });
+});
+
+describe('capitals and flags', () => {
+  it('has a capital for every country, and no capital name belongs to two countries', () => {
+    const owner = new Map<string, string>();
+    for (const c of COUNTRIES) {
+      const cap = CAPITALS.get(c.id);
+      expect(cap, c.id).toBeDefined();
+      for (const key of [cap!.name, ...cap!.aliases].map(normalize)) {
+        expect(owner.get(key) ?? c.id, `${key} for ${c.id}`).toBe(c.id);
+        owner.set(key, c.id);
+      }
+    }
+    expect(CAPITALS.size).toBe(COUNTRIES.length);
+  });
+  it('accepts the alternatives the spec names', () => {
+    expect(capitalOf('BOL')).toBe('Sucre');
+    expect(CAPITALS.get('BOL')!.aliases).toContain('La Paz');
+    expect(CAPITALS.get('UKR')!.aliases).toContain('Kiev');
+    expect(CAPITALS.get('ZAF')!.aliases).toEqual(expect.arrayContaining(['Cape Town', 'Bloemfontein']));
+    expect(capitalOf('NRU')).toBe('Yaren');
+    expect(capitalOf('PSE')).toBe('Ramallah');
+  });
+  it('has a flag file for every country', () => {
+    for (const c of COUNTRIES) expect(existsSync(`public/flags/${c.id}.svg`), c.id).toBe(true);
+  });
+  it('lookalike groups use real ids, at least 25 groups', () => {
+    expect(FLAG_LOOKALIKES.length).toBeGreaterThanOrEqual(25);
+    for (const g of FLAG_LOOKALIKES) for (const id of g) expect(COUNTRY.has(id), id).toBe(true);
   });
 });
