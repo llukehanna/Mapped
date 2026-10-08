@@ -48,6 +48,7 @@ it('topic board routes', async () => {
   expect(await (await call(env, 'GET', '/api/boards/flags/type/world')).json()).toMatchObject({ board: 'flags:type:world', rows: [] });
   expect((await call(env, 'GET', '/api/boards/rivers/type/world')).status).toBe(404);
   expect((await call(env, 'GET', '/api/boards/type/world')).status).toBe(200);
+  expect((await call(env, 'GET', '/api/boards/countries/type/world')).status).toBe(404);
 });
 
 it('your recent games carry their topic', async () => {
