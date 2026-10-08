@@ -82,7 +82,14 @@ export async function getBoard(req: Request, env: Env, board: string): Promise<R
 export async function myGames(req: Request, env: Env): Promise<Response> {
   const user = await requireUser(req, env);
   const [bests, personal, recent] = await env.DB.batch([
-    env.DB.prepare('SELECT board, found, total, hints, ms, finished_at FROM bests WHERE user_id = ?').bind(user.id),
+    // Each best carries its rank (the same tie-breaks as rankOf), so the whole page costs a fixed number of D1 queries.
+    env.DB.prepare(
+      `SELECT b.board, b.found, b.total, b.hints, b.ms, b.finished_at,
+         1 + (SELECT count(*) FROM bests o JOIN users u ON u.id = o.user_id
+              WHERE o.board = b.board AND u.name IS NOT NULL
+                AND (o.found > b.found OR (o.found = b.found AND (o.hints < b.hints OR (o.hints = b.hints AND (o.ms < b.ms OR (o.ms = b.ms AND o.finished_at < b.finished_at))))))) AS rank
+       FROM bests b WHERE b.user_id = ?`,
+    ).bind(user.id),
     env.DB.prepare(
       `SELECT board, found, total, hints, ms, ranked FROM (
          SELECT g.*, row_number() OVER (PARTITION BY board ORDER BY found DESC, ranked DESC, hints, ms, finished_at) AS n
@@ -96,17 +103,15 @@ export async function myGames(req: Request, env: Env): Promise<Response> {
        WHERE g.user_id = ? AND g.finished_at IS NOT NULL ORDER BY g.finished_at DESC LIMIT 50`,
     ).bind(user.id),
   ]);
-  type BestRow = { board: Board; found: number; total: number; hints: number; ms: number; finished_at: number };
-  const ranked = await Promise.all(
-    (bests.results as BestRow[]).map(async (b) => ({
-      board: b.board,
-      found: b.found,
-      total: b.total,
-      hints: b.hints,
-      ms: b.ms,
-      rank: user.name === null ? null : await rankOf(env.DB, b.board, { found: b.found, hints: b.hints, ms: b.ms, finishedAt: b.finished_at }),
-    })),
-  );
+  type BestRow = { board: Board; found: number; total: number; hints: number; ms: number; finished_at: number; rank: number };
+  const ranked = (bests.results as BestRow[]).map((b) => ({
+    board: b.board,
+    found: b.found,
+    total: b.total,
+    hints: b.hints,
+    ms: b.ms,
+    rank: user.name === null ? null : b.rank,
+  }));
   type GameRow = {
     id: string; config: string; mode: Mode; scope_key: string; found: number; total: number; hints: number; ms: number;
     end_reason: EndReason; ranked: number; unranked_reason: RecentGame['reason']; finished_at: number; is_best: number;

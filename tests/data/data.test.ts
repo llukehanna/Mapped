@@ -106,6 +106,11 @@ describe('capitals and flags', () => {
     expect(capitalOf('NRU')).toBe('Yaren');
     expect(capitalOf('PSE')).toBe('Ramallah');
     expect(CAPITALS.get('IND')!.aliases).toContain('Delhi');
+    expect(CAPITALS.get('CIV')!.aliases).toContain('Abidjan');
+    expect(CAPITALS.get('BEN')!.aliases).toContain('Cotonou');
+    expect(CAPITALS.get('BDI')!.aliases).toContain('Bujumbura');
+    expect(CAPITALS.get('NLD')!.aliases).toContain('The Hague');
+    expect(CAPITALS.get('XKX')!.aliases).toContain('Prishtina');
   });
   it('has a flag file for every country', () => {
     for (const c of COUNTRIES) expect(existsSync(`public/flags/${c.id}.svg`), c.id).toBe(true);

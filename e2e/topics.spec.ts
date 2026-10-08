@@ -65,6 +65,26 @@ test('flags · identify: pick with the number keys; a wrong pick costs a try', a
   expect(errors).toEqual([]);
 });
 
+test('flags · identify: clicking the same wrong flag twice in a row costs one try', async ({ page }) => {
+  const errors = watchErrors(page);
+  await openSetup(page);
+  await chooseTopic(page, 'Flags');
+  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await chooseMode(page, 'Identify');
+  await start(page);
+  const choices = page.locator('.flag-choices button');
+  const target = await page.locator('.flag-choices').getAttribute('data-target-id');
+  const srcs = await choices.evaluateAll((els) => els.map((b) => b.querySelector('img')!.getAttribute('src')));
+  const wrong = srcs.findIndex((s) => s !== `/flags/${target}.svg`);
+  // Both clicks land in one task, before React can re-render with the flag disabled.
+  await choices.nth(wrong).evaluate((b) => {
+    (b as HTMLButtonElement).click();
+    (b as HTMLButtonElement).click();
+  });
+  await expect(page.locator('.flag-choices .tries i.on')).toHaveCount(2);
+  expect(errors).toEqual([]);
+});
+
 test('flags · identify: each hint takes away a wrong flag', async ({ page }) => {
   await openSetup(page);
   await chooseTopic(page, 'Flags');

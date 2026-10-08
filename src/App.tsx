@@ -116,6 +116,8 @@ export function App() {
   const [wantHint, setWantHint] = useState(false);
   /** Flags · Identify: flags picked wrongly for the current target (keyed by game and target, so they reset as it moves on). */
   const [wrongFlags, setWrongFlags] = useState<{ game: number | null; goal: string; ids: string[] } | null>(null);
+  /** Mirrors wrongFlags synchronously, so a second click before the re-render can't spend another try on the same flag. */
+  const wrongFlagsNow = useRef(wrongFlags);
   /** The "Give up?" dialog is open. The clock keeps running behind it. */
   const [confirming, setConfirming] = useState(false);
   const toastSeq = useRef(0);
@@ -393,6 +395,7 @@ export function App() {
     setArmed(null);
     setPicked(null);
     setWantHint(false);
+    wrongFlagsNow.current = null;
     setWrongFlags(null);
     setTip(null);
     setConfirming(false);
@@ -449,7 +452,14 @@ export function App() {
   /** Flags · Identify: a flag button or its number key. A wrong pick stays disabled for this target. */
   function pickFlag(id: string) {
     if (state.phase !== 'playing' || !goal || rules.answer !== 'flag' || disabledFlags.includes(id)) return;
-    if (id !== goal) setWrongFlags({ game: state.startedAt, goal, ids: [...wrongPicks, id] });
+    // Read the ref, not this render's wrongPicks: a double click lands before the re-render.
+    const prev = wrongFlagsNow.current;
+    const already = prev && prev.game === state.startedAt && prev.goal === goal ? prev.ids : [];
+    if (already.includes(id)) return;
+    if (id !== goal) {
+      wrongFlagsNow.current = { game: state.startedAt, goal, ids: [...already, id] };
+      setWrongFlags(wrongFlagsNow.current);
+    }
     dispatch({ type: 'click', id, now: Date.now() });
   }
 
