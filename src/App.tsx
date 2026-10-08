@@ -695,7 +695,7 @@ export function App() {
               clues={clues}
               levels={levels}
               picked={pick !== null}
-              spelled={mode !== 'locate'}
+              spelled={rules.answer === 'country' || rules.answer === 'capital'}
               onHint={() => {
                 hint();
                 inputRef.current?.focus();
