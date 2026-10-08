@@ -29,7 +29,7 @@ import { GuessInput } from './ui/GuessInput.tsx';
 import { useKeyboardInset, useMediaQuery, useNow, useSize, useTransient } from './ui/hooks.ts';
 import { Icon } from './ui/Icon.tsx';
 import { LocatePrompt } from './ui/LocatePrompt.tsx';
-import { PauseOverlay } from './ui/PauseOverlay.tsx';
+import { GiveUpDialog } from './ui/GiveUpDialog.tsx';
 import { RegionProgress } from './ui/RegionProgress.tsx';
 import { ReviewPanel } from './ui/ReviewPanel.tsx';
 import { MODES, SetupCard } from './ui/SetupCard.tsx';
@@ -104,8 +104,8 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [newBest, setNewBest] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
-  /** The "Give up?" dialog is open. `resume`: it paused a running game, so cancelling resumes it. */
-  const [confirming, setConfirming] = useState<{ resume: boolean } | null>(null);
+  /** The "Give up?" dialog is open. The clock keeps running behind it. */
+  const [confirming, setConfirming] = useState(false);
   const toastSeq = useRef(0);
   const { user, setUser, signOut } = useSession();
   const [route, go] = useRoute();
@@ -128,7 +128,7 @@ export function App() {
   };
   const guess = useGuess({ state, dispatch, index: INDEX, say, flash: flashJust, onHint: () => dispatch({ type: 'hint', rand: random(), now: Date.now() }) });
 
-  const playing = state.phase === 'playing' || state.phase === 'paused';
+  const playing = state.phase === 'playing';
   const mode = state.config.mode;
   const goal = target(state);
   const limitMs = state.config.timeLimitSec === null ? null : state.config.timeLimitSec * 1000;
@@ -159,15 +159,10 @@ export function App() {
     }
   }, [left, state.phase]);
 
-  // Leaving the tab pauses a stopwatch game. A countdown keeps running so looking answers up costs time,
-  // and so does a ranked run, since pausing would unrank it.
+  // There is no pause: the clock always runs. The "Give up?" question closes if the game ends under it (a countdown running out).
   useEffect(() => {
-    const onVisibility = () => {
-      if (document.hidden && state.phase === 'playing' && limitMs === null && !rankedRun) dispatch({ type: 'pause', now: Date.now() });
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [state.phase, limitMs, rankedRun]);
+    if (state.phase !== 'playing') setConfirming(false);
+  }, [state.phase]);
 
   // React to game events: glow, flashes, toasts, screen-reader announcements.
   useEffect(() => {
@@ -364,25 +359,21 @@ export function App() {
     setMenuOpen(false);
     setArmed(null);
     setTip(null);
-    setConfirming(null);
+    setConfirming(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
   const hint = () => dispatch({ type: 'hint', rand: random(), now: Date.now() });
-  const togglePause = () =>
-    dispatch(state.phase === 'paused' ? { type: 'resume', now: Date.now() } : { type: 'pause', now: Date.now() });
-  // Give up always goes through one central dialog, which pauses the clock while it's open.
+  // Give up always goes through one central dialog. The clock keeps running while it's open.
   const askGiveUp = () => {
     setMenuOpen(false);
-    if (state.phase === 'playing') dispatch({ type: 'pause', now: Date.now() });
-    setConfirming({ resume: state.phase === 'playing' });
+    setConfirming(true);
   };
   const cancelGiveUp = () => {
-    if (confirming?.resume) dispatch({ type: 'resume', now: Date.now() });
-    setConfirming(null);
+    setConfirming(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   };
   const giveUp = () => {
-    setConfirming(null);
+    setConfirming(false);
     dispatch({ type: 'giveUp', now: Date.now() });
   };
 
@@ -403,23 +394,25 @@ export function App() {
     dispatch({ type: 'click', id, now: Date.now() });
   }
 
-  // Keyboard: Esc pause, ? hint, S skip, + − 0 zoom, Enter start/replay, typing goes to the input.
+  // Keyboard: Esc give up, ? hint, S skip, + − 0 zoom, Enter start/replay, typing goes to the input.
   const overlay = renderOverlay();
-  const keys = useRef({ state, guess, start, hint, togglePause, confirming, cancelGiveUp, blocked: false });
+  const keys = useRef({ state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, blocked: false });
   useLayoutEffect(() => {
-    keys.current = { state, guess, start, hint, togglePause, confirming, cancelGiveUp, blocked: overlay !== null };
+    keys.current = { state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, blocked: overlay !== null };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const { state: s, guess: g, start: go, hint: h, togglePause: pause, confirming: asking, cancelGiveUp: cancel, blocked } = keys.current;
+      const { state: s, guess: g, start: go, hint: h, askGiveUp: ask, confirming: asking, cancelGiveUp: cancel, blocked } = keys.current;
       // A card is open over the map: it handles its own keys.
       if (blocked) return;
       const inField = e.target instanceof HTMLInputElement;
       const onButton = e.target instanceof HTMLButtonElement;
       const inCorner = e.target instanceof Element && !!e.target.closest('.corner, [role="menuitem"]');
       if (e.key === 'Escape' && asking) return void cancel();
-      if (e.key === 'Escape' && (s.phase === 'playing' || s.phase === 'paused')) return void pause();
+      // The give-up question handles its own buttons; nothing else reaches the game while it's open.
+      if (asking) return;
+      if (e.key === 'Escape' && s.phase === 'playing') return void ask();
       // In setup, Enter always starts (Space still toggles a focused chip). In review it replays unless a button has focus.
       if (e.key === 'Enter' && s.phase === 'setup' && !inField && !inCorner) {
         e.preventDefault();
@@ -510,7 +503,7 @@ export function App() {
     if ((route.name === 'me' || route.name === 'signin') && !user) return <SignInCard onSignIn={beginSignIn} onClose={home} />;
     return null;
   }
-  const safe = safeArea(state.phase === 'paused' ? 'playing' : state.phase, small, size.width, size.height, keyboard);
+  const safe = safeArea(state.phase, small, size.width, size.height, keyboard);
 
   const clock = limitMs === null ? formatClock(spent) : formatCountdown(limitMs - spent);
   const clockLevel = left <= 10_000 ? 'crit' : left <= 60_000 ? 'warn' : '';
@@ -520,7 +513,7 @@ export function App() {
 
   return (
     <div className={`app phase-${state.phase}`} style={{ '--kb': `${keyboard}px` } as CSSProperties}>
-      <div className="map-wrap" ref={wrapRef} aria-hidden={state.phase === 'paused'}>
+      <div className="map-wrap" ref={wrapRef}>
         {shapeList && size.width > 0 && (
           <WorldMap
             ref={mapRef}
@@ -599,11 +592,9 @@ export function App() {
             total={state.pool.length}
             clock={clock}
             clockLevel={clockLevel}
-            paused={state.phase === 'paused'}
             theme={theme}
             onTheme={toggleTheme}
             onHint={hint}
-            onPause={togglePause}
             onGiveUp={askGiveUp}
             onMenu={() => setMenuOpen(!menuOpen)}
           />
@@ -636,24 +627,12 @@ export function App() {
           </div>
           {!small && <RegionProgress rows={rows} />}
           <ZoomControls onIn={() => mapRef.current?.zoomBy(1.6)} onOut={() => mapRef.current?.zoomBy(1 / 1.6)} onFit={() => mapRef.current?.fit()} />
-          {state.phase === 'paused' && (
-            <PauseOverlay
-              confirming={confirming !== null}
-              ranked={rankedRun}
-              onResume={togglePause}
-              onAskGiveUp={askGiveUp}
-              onCancel={cancelGiveUp}
-              onGiveUp={giveUp}
-            />
-          )}
+          {confirming && <GiveUpDialog onCancel={cancelGiveUp} onGiveUp={giveUp} />}
           {menuOpen && small && (
             <div className="sheet glass" role="dialog" aria-label="Menu">
               <div className="sheet-actions">
                 <button type="button" className="btn" onClick={() => (setMenuOpen(false), hint())}>
                   <Icon name="hint" /> Hint
-                </button>
-                <button type="button" className="btn" onClick={() => (setMenuOpen(false), togglePause())}>
-                  <Icon name="pause" /> Pause
                 </button>
                 <GiveUpButton onGiveUp={askGiveUp} />
                 <ThemeToggle theme={theme} onToggle={toggleTheme} />

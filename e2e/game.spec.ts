@@ -75,38 +75,22 @@ test('countdown: time running out ends the game', async ({ page }) => {
   await expect(page.getByText('Missed · 12')).toBeVisible();
 });
 
-test('give up always asks in one central dialog that pauses the clock; Esc keeps playing', async ({ page }) => {
+test('there is no pause: Esc and Give up ask in one central dialog while the clock keeps running', async ({ page }) => {
   await openSetup(page);
   await page.getByRole('button', { name: /^S\. America/ }).click();
   await start(page);
+  await expect(page.getByRole('button', { name: /Pause/ })).toHaveCount(0);
   const dialog = page.getByRole('alertdialog', { name: 'Give up?' });
-  await page.getByRole('button', { name: 'Give up' }).click();
+  const clock = page.locator('.topbar .clock');
+  await page.keyboard.press('Escape');
   await expect(dialog).toBeVisible();
-  await expect(page.locator('.app')).toHaveClass(/phase-paused/);
+  const before = await clock.textContent();
+  await expect(clock).not.toHaveText(before!, { timeout: 3000 });
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  await expect(page.locator('.app')).toHaveClass(/phase-playing/);
-  // From the pause card, Give up leads to the same dialog.
-  await page.keyboard.press('Escape');
-  await page.getByRole('dialog', { name: 'Paused' }).getByRole('button', { name: 'Give up' }).click();
+  await page.getByRole('button', { name: 'Give up' }).click();
   await dialog.getByRole('button', { name: 'Give up' }).click();
   await expect(page.locator('.review-bar')).toBeVisible();
-});
-
-test('paused hides the map itself, not just behind a backdrop', async ({ page }) => {
-  await openSetup(page);
-  await start(page);
-  await page.keyboard.press('Escape');
-  await expect(page.locator('.map-wrap')).toHaveCSS('filter', /blur/);
-});
-
-test('pause hides the map and Esc resumes', async ({ page }) => {
-  await openSetup(page);
-  await start(page);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Paused' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Paused' })).toBeHidden();
 });
 
 test('hints climb a ladder of clues and zoom to the country', async ({ page }) => {

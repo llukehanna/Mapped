@@ -53,7 +53,8 @@ Players can sign in with Google. Signed-in players' games are saved, and complet
 
 ## Revisions after launch
 
-- Boards rank most countries found first, then fewest hints, then fastest, then earliest. Unfinished runs (given up, timed out, skipped) rank, behind every run that found more. A run that found nothing stays unranked (`incomplete`, shown as "nothing found"). The speed check is per country found. `bests` stores `found` and `total` (migration 0004). The leaderboard shows a Found column; its footer reads "Most found, then fewest hints, then fastest. Unpaused runs only."
+- Boards rank most countries found first, then fewest hints, then fastest, then earliest. Unfinished runs (given up, timed out, skipped) rank, behind every run that found more. A run that found nothing stays unranked (`incomplete`, shown as "nothing found"). The speed check is per country found. `bests` stores `found` and `total` (migration 0004). The leaderboard shows a Found column; its footer reads "Most found, then fewest hints, then fastest."
+- Pause is gone: it let players stop the clock to look answers up. There is no Pause button, Esc opens the "Give up?" question, hiding the tab does nothing, and the clock keeps running while the question is open. The reducer still understands `pause`/`resume`, so the server still marks any log that contains one as `paused` (unranked); old paused games keep that label.
 
 ## Architecture
 

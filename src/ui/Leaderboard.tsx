@@ -98,7 +98,7 @@ export function Leaderboard({ mode, region, onPick, onClose }: LeaderboardProps)
         )}
       </div>
       <div className="card-foot mute">
-        <span>Most found, then fewest hints, then fastest. Unpaused runs only.</span>
+        <span>Most found, then fewest hints, then fastest.</span>
         {data && data !== 'error' && <span>{data.players} {data.players === 1 ? 'player' : 'players'}</span>}
       </div>
     </CenterCard>

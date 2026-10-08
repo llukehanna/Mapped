@@ -30,15 +30,14 @@ test('play signed out, sign in from the review: the game is claimed and on the b
   expect(errors).toEqual([]);
 });
 
-test('a paused run is saved unranked', async ({ page }) => {
+test('an unfinished run still ranks: the save card offers its place on the board', async ({ page }) => {
   await openSetup(page);
   await page.getByRole('button', { name: /^S\. America/ }).click();
   await start(page);
+  await typeLikeAPerson(page, SOUTH_AMERICA.slice(0, 3));
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Paused' })).toContainText('Pausing makes this run unranked.');
-  await page.keyboard.press('Escape');
-  await typeLikeAPerson(page, SOUTH_AMERICA);
-  await expect(page.locator('.savecard')).toContainText('Unranked: paused.');
+  await page.getByRole('alertdialog', { name: 'Give up?' }).getByRole('button', { name: 'Give up' }).click();
+  await expect(page.locator('.savecard')).toContainText(/3\/12 · 0 hints · \d+:\d\d would put you #\d+ on S\. America · Type/);
 });
 
 test('a leaderboard link opens that board, and closing it goes home', async ({ page }) => {
