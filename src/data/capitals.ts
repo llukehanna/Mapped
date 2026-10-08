@@ -21,7 +21,7 @@ const ROWS: Row[] = [
   ['SYR', 'Damascus'], ['TUR', 'Ankara'], ['ARE', 'Abu Dhabi'], ['YEM', "Sana'a"], ['ARM', 'Yerevan'],
   ['AZE', 'Baku'], ['GEO', 'Tbilisi'], ['KAZ', 'Astana', ['Nur-Sultan']], ['KGZ', 'Bishkek'], ['TJK', 'Dushanbe'],
   ['TKM', 'Ashgabat'], ['UZB', 'Tashkent'], ['AFG', 'Kabul'], ['BGD', 'Dhaka'], ['BTN', 'Thimphu'],
-  ['IND', 'New Delhi'], ['MDV', 'Malé'], ['NPL', 'Kathmandu'], ['PAK', 'Islamabad'],
+  ['IND', 'New Delhi', ['Delhi']], ['MDV', 'Malé'], ['NPL', 'Kathmandu'], ['PAK', 'Islamabad'],
   ['LKA', 'Sri Jayawardenepura Kotte', ['Kotte', 'Colombo']], ['CHN', 'Beijing'], ['JPN', 'Tokyo'],
   ['MNG', 'Ulaanbaatar', ['Ulan Bator']], ['PRK', 'Pyongyang'], ['KOR', 'Seoul'], ['TWN', 'Taipei'],
   ['BRN', 'Bandar Seri Begawan'], ['KHM', 'Phnom Penh'], ['IDN', 'Jakarta'], ['LAO', 'Vientiane'],
