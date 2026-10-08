@@ -26,6 +26,7 @@ export interface ImportEntry {
   at: number;
 }
 
+/** 'incomplete' now means nothing was found: unfinished runs rank, behind every run that found more. */
 export type UnrankedReason = 'custom' | 'incomplete' | 'paused' | 'unverified' | 'anonymous' | 'imported';
 
 export interface User {
@@ -43,6 +44,8 @@ export interface StartResponse {
 }
 
 export interface BestSummary {
+  found: number;
+  total: number;
   hints: number;
   ms: number;
   /** null while the player has no name and so isn't on the board */
@@ -70,6 +73,8 @@ export interface GameResult {
 export interface BoardRow {
   rank: number;
   name: string;
+  found: number;
+  total: number;
   hints: number;
   ms: number;
   finishedAt: number;

@@ -103,11 +103,12 @@ export function judge({ config, seed, log, board, serverElapsedMs }: JudgeInput)
   if (!played) return null;
   const { state, findTimes, paused } = played;
   const result = { found: state.found.length, total: state.pool.length, hints: state.hintsUsed, ms: state.elapsedMs, endReason: state.endReason! };
+  // Unfinished runs rank too (more found first), so the speed check is per country found.
   const tooFast =
-    result.ms / result.total < MIN_MS_PER_COUNTRY || findTimes.some((t, i) => i > 0 && t - findTimes[i - 1] < MIN_FIND_GAP_MS);
+    result.ms / result.found < MIN_MS_PER_COUNTRY || findTimes.some((t, i) => i > 0 && t - findTimes[i - 1] < MIN_FIND_GAP_MS);
   const reason = !board
     ? 'custom'
-    : result.found < result.total
+    : result.found === 0
       ? 'incomplete'
       : paused
         ? 'paused'

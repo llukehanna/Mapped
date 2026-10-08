@@ -37,14 +37,15 @@ export function boardLabel(board: Board): string {
 }
 
 export interface Run {
+  found: number;
   hints: number;
   ms: number;
   finishedAt: number;
 }
 
-/** Negative when `a` ranks above `b`: fewer hints, then faster, then earlier. */
+/** Negative when `a` ranks above `b`: more found, then fewer hints, then faster, then earlier. */
 export function compareRuns(a: Run, b: Run): number {
-  return a.hints - b.hints || a.ms - b.ms || a.finishedAt - b.finishedAt;
+  return b.found - a.found || a.hints - b.hints || a.ms - b.ms || a.finishedAt - b.finishedAt;
 }
 
 const SUBREGIONS = new Set(COUNTRIES.map((c) => c.subregion));

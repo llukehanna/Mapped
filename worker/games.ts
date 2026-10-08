@@ -65,7 +65,7 @@ export async function startGame(req: Request, env: Env): Promise<Response> {
 
 /** The response for a finished game; records a new best first when the game ranks and has an owner. */
 async function result(env: Env, game: GameRow): Promise<GameResult> {
-  const run = { hints: game.hints, ms: game.ms, finishedAt: game.finished_at! };
+  const run = { found: game.found, total: game.total, hints: game.hints, ms: game.ms, finishedAt: game.finished_at! };
   const owned = game.user_id !== null && game.board !== null;
   const newBest = owned && game.ranked === 1 ? await recordBest(env.DB, game.user_id!, game.board!, game.id, run) : false;
   return {
@@ -79,7 +79,7 @@ async function result(env: Env, game: GameRow): Promise<GameResult> {
     ranked: game.ranked === 1,
     reason: game.unranked_reason,
     newBest,
-    best: owned ? await bestOf(env.DB, game.user_id!, game.board!).then((b) => b && { hints: b.hints, ms: b.ms, rank: b.rank }) : null,
+    best: owned ? await bestOf(env.DB, game.user_id!, game.board!).then((b) => b && { found: b.found, total: b.total, hints: b.hints, ms: b.ms, rank: b.rank }) : null,
     wouldRank: game.unranked_reason === 'anonymous' ? await rankOf(env.DB, game.board!, run) : null,
   };
 }

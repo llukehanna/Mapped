@@ -153,7 +153,8 @@ export function SetupCard({ config, best, serverBest, onChange, onStart }: Setup
         </span>
         {serverBest ? (
           <span>
-            Best <b>{hintsText(serverBest.hints)}</b> · <b>{formatClock(serverBest.ms)}</b>
+            Best {serverBest.found < serverBest.total && <><b>{serverBest.found}/{serverBest.total}</b> · </>}
+            <b>{hintsText(serverBest.hints)}</b> · <b>{formatClock(serverBest.ms)}</b>
             {serverBest.rank && (
               <>
                 {' '}

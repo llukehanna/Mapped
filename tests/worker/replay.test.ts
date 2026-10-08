@@ -37,28 +37,46 @@ describe('honest games rank', () => {
   });
 });
 
-describe('honest games that do not rank', () => {
-  it('custom scope', () => {
-    const config = cfg({ scope: { continents: [], subregions: ['Caribbean'] } });
-    expect(verdict(config, play(config, typeAll))).toMatchObject({ reason: 'custom' });
-  });
-
+describe('unfinished runs rank too', () => {
   it('giving up', () => {
     const log = play(cfg(), (s, now) => (s.found.length < 3 ? typeAll(s, now) : { type: 'giveUp', now }));
-    expect(verdict(cfg(), log)).toMatchObject({ found: 3, endReason: 'gaveUp', reason: 'incomplete' });
+    expect(verdict(cfg(), log)).toMatchObject({ found: 3, endReason: 'gaveUp', reason: null });
   });
 
   it('running out of time', () => {
     const config = cfg({ timeLimitSec: 60 });
     const log = play(config, (s, now) => (s.found.length < 5 ? typeAll(s, now) : { type: 'tick', now }), 10_000);
-    expect(verdict(config, log)).toMatchObject({ found: 5, endReason: 'timeout', ms: 60_000, reason: 'incomplete' });
+    expect(verdict(config, log)).toMatchObject({ found: 5, endReason: 'timeout', ms: 60_000, reason: null });
   });
 
   it('skipping in identify', () => {
     const config = cfg({ mode: 'identify' });
     let skipped = false;
     const log = play(config, (s, now) => (skipped ? { type: 'found', id: target(s)!, now } : ((skipped = true), { type: 'skip', now })));
-    expect(verdict(config, log)).toMatchObject({ found: 11, reason: 'incomplete' });
+    expect(verdict(config, log)).toMatchObject({ found: 11, reason: null });
+  });
+
+  it('the per-country speed check counts only the countries found', () => {
+    // 3 finds 2 s apart, then a quick give-up: 8 s over 3 found is fine, though it is under 0.3 s for each of the 12.
+    const log = play(cfg(), (s, now) => (s.found.length < 3 ? typeAll(s, now) : { type: 'giveUp', now }));
+    expect(verdict(cfg(), log)).toMatchObject({ ms: 8000, reason: null });
+  });
+});
+
+describe('honest games that do not rank', () => {
+  it('custom scope', () => {
+    const config = cfg({ scope: { continents: [], subregions: ['Caribbean'] } });
+    expect(verdict(config, play(config, typeAll))).toMatchObject({ reason: 'custom' });
+  });
+
+  it('finding nothing', () => {
+    const log = play(cfg(), (_s, now) => ({ type: 'giveUp', now }));
+    expect(verdict(cfg(), log)).toMatchObject({ found: 0, endReason: 'gaveUp', reason: 'incomplete' });
+  });
+
+  it('pausing an unfinished run', () => {
+    const log = play(cfg(), (s, now) => (s.phase === 'paused' ? { type: 'giveUp', now } : s.found.length < 2 ? typeAll(s, now) : { type: 'pause', now }));
+    expect(verdict(cfg(), log)).toMatchObject({ found: 2, reason: 'paused' });
   });
 
   it('pausing', () => {

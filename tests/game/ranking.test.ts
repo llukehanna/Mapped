@@ -27,14 +27,15 @@ describe('boards', () => {
     expect(boardLabel('locate:south-america')).toBe('S. America · Locate');
   });
 
-  it('ranks fewer hints first, then time, then the earlier finish', () => {
+  it('ranks more found first, then fewer hints, then time, then the earlier finish', () => {
     const runs = [
-      { hints: 1, ms: 50_000, finishedAt: 1 },
-      { hints: 0, ms: 90_000, finishedAt: 5 },
-      { hints: 0, ms: 90_000, finishedAt: 2 },
-      { hints: 0, ms: 80_000, finishedAt: 9 },
+      { found: 12, hints: 1, ms: 50_000, finishedAt: 1 },
+      { found: 12, hints: 0, ms: 90_000, finishedAt: 5 },
+      { found: 12, hints: 0, ms: 90_000, finishedAt: 2 },
+      { found: 12, hints: 0, ms: 80_000, finishedAt: 9 },
+      { found: 11, hints: 0, ms: 10_000, finishedAt: 0 },
     ];
-    expect([...runs].sort(compareRuns)).toEqual([runs[3], runs[2], runs[1], runs[0]]);
+    expect([...runs].sort(compareRuns)).toEqual([runs[3], runs[2], runs[1], runs[0], runs[4]]);
   });
 });
 

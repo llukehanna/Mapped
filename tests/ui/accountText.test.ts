@@ -47,19 +47,28 @@ describe('save card text', () => {
   });
 
   it('a new best, with and without a name', () => {
-    expect(saveMessage(saved({ newBest: true, best: { hints: 0, ms: 847_000, rank: 12 } }), true)).toMatchObject({
+    expect(saveMessage(saved({ newBest: true, best: { found: 197, total: 197, hints: 0, ms: 847_000, rank: 12 } }), true)).toMatchObject({
       tone: 'gold',
       title: 'Saved · #12 on World · Type',
       detail: 'New personal best.',
       board: 'type:world',
     });
-    expect(saveMessage(saved({ newBest: true, best: { hints: 0, ms: 847_000, rank: null } }), true).detail).toBe(
+    expect(saveMessage(saved({ newBest: true, best: { found: 197, total: 197, hints: 0, ms: 847_000, rank: null } }), true).detail).toBe(
       'Pick a name to appear on the leaderboard.',
     );
   });
 
+  it('an unfinished run says how many it found', () => {
+    expect(saveMessage(saved({ found: 139, hints: 31, ms: 1_366_000, ranked: false, reason: 'anonymous', wouldRank: 3 }), false).detail).toBe(
+      '139/197 · 31 hints · 22:46 would put you #3 on World · Type.',
+    );
+    expect(saveMessage(saved({ found: 50, best: { found: 139, total: 197, hints: 31, ms: 1_366_000, rank: 2 } }), true).detail).toBe(
+      'Your best on World · Type stays 139/197 · 31 hints · 22:46 (#2).',
+    );
+  });
+
   it('ranked but not a best', () => {
-    expect(saveMessage(saved({ best: { hints: 1, ms: 832_000, rank: 9 } }), true).detail).toBe('Your best on World · Type stays 1 hint · 13:52 (#9).');
+    expect(saveMessage(saved({ best: { found: 197, total: 197, hints: 1, ms: 832_000, rank: 9 } }), true).detail).toBe('Your best on World · Type stays 1 hint · 13:52 (#9).');
   });
 
   it('unranked, signed in', () => {
