@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { asPlayer, openSetup, pickName, signInFromSetup, start, typeLikeAPerson, watchErrors } from './helpers.ts';
+import { asPlayer, chooseTopic, openSetup, pickName, signInFromSetup, start, typeLikeAPerson, watchErrors } from './helpers.ts';
 
 const SOUTH_AMERICA = ['Argentina', 'Bolivia', 'Brazil', 'Chile', 'Colombia', 'Ecuador', 'Guyana', 'Paraguay', 'Peru', 'Suriname', 'Uruguay', 'Venezuela'];
 
@@ -50,6 +50,36 @@ test('a leaderboard link opens that board, and closing it goes home', async ({ p
   await board.getByRole('button', { name: 'Close' }).click();
   await expect(page).toHaveURL(/localhost:4173\/$/);
   await expect(board).toBeHidden();
+});
+
+test('leaderboards and your games switch topics', async ({ page }) => {
+  await asPlayer(page);
+  await page.goto('/leaderboards/flags/type/europe');
+  const board = page.getByRole('dialog', { name: 'Leaderboards' });
+  await expect(board.getByRole('tab', { name: 'Flags' })).toHaveAttribute('aria-selected', 'true');
+  await board.getByRole('tab', { name: 'Capitals' }).click();
+  await expect(page).toHaveURL(/\/leaderboards\/capitals\/type\/europe$/);
+  await board.getByRole('tab', { name: 'Countries' }).click();
+  await expect(page).toHaveURL(/\/leaderboards\/type\/europe$/);
+});
+
+test('the setup Leaderboards button opens the board for the chosen topic; Your games has topic tabs', async ({ page }) => {
+  const player = await asPlayer(page);
+  await openSetup(page);
+  await chooseTopic(page, 'Capitals');
+  await page.getByRole('button', { name: 'Leaderboards' }).click();
+  await expect(page).toHaveURL(/\/leaderboards\/capitals\/type\/world$/);
+  await expect(page.getByRole('dialog', { name: 'Leaderboards' }).getByRole('tab', { name: 'Capitals' })).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Escape');
+  await signInFromSetup(page);
+  await pickName(page, player.name);
+  await page.locator('.namechip').click();
+  await page.getByRole('menuitem', { name: 'Your games' }).click();
+  const games = page.getByRole('dialog', { name: 'Your games' });
+  await expect(games.getByRole('tab', { name: 'Countries' })).toHaveAttribute('aria-selected', 'true');
+  await games.getByRole('tab', { name: 'Flags' }).click();
+  await expect(games.getByRole('tab', { name: 'Flags' })).toHaveAttribute('aria-selected', 'true');
+  await expect(games.locator('.best-cell:not(.none)')).toHaveCount(0);
 });
 
 test('sign in from setup, then sign out', async ({ page }) => {

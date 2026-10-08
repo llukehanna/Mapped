@@ -1,4 +1,5 @@
 import type { Board } from '../game/ranking.ts';
+import type { Topic } from '../game/topics.ts';
 import type { EndReason, GameConfig, Mode } from '../game/types.ts';
 
 /** Shared between the Worker and the browser: the JSON each API route sends back. */
@@ -91,6 +92,7 @@ export interface BoardResponse {
 
 export interface RecentGame {
   id: string;
+  topic: Topic;
   mode: Mode;
   scopeKey: string;
   found: number;

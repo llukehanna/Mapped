@@ -43,6 +43,21 @@ it('a flags game goes on its own board', async () => {
   expect(await res.json()).toMatchObject({ ranked: true, board: 'flags:type:south-america', best: { rank: 1 } });
 });
 
+it('topic board routes', async () => {
+  expect((await call(env, 'GET', '/api/boards/flags/type/world')).status).toBe(200);
+  expect(await (await call(env, 'GET', '/api/boards/flags/type/world')).json()).toMatchObject({ board: 'flags:type:world', rows: [] });
+  expect((await call(env, 'GET', '/api/boards/rivers/type/world')).status).toBe(404);
+  expect((await call(env, 'GET', '/api/boards/type/world')).status).toBe(200);
+});
+
+it('your recent games carry their topic', async () => {
+  const ana = await signIn(env, 'ana@example.com', 'meridian');
+  await playGame(ana);
+  await playGame(ana, { config: { ...SOUTH_AMERICA, topic: 'capitals' } });
+  const mine: MyGamesResponse = await (await call(env, 'GET', '/api/me/games', { cookie: ana })).json();
+  expect(mine.recent.map((g) => g.topic)).toEqual(['capitals', 'countries']);
+});
+
 describe('starting a game', () => {
   it('returns an id, a seed and the board; a claim token only when signed out', async () => {
     const anon = await start();

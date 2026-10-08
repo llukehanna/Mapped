@@ -1,24 +1,26 @@
 import { useEffect, useState } from 'react';
 import { BOARD_MODES, BOARD_REGIONS, type Region } from '../game/ranking.ts';
+import type { Topic } from '../game/topics.ts';
 import type { Mode } from '../game/types.ts';
 
-export type Route = { name: 'home' } | { name: 'signin' } | { name: 'me' } | { name: 'board'; mode: Mode; region: Region };
+export type Route = { name: 'home' } | { name: 'signin' } | { name: 'me' } | { name: 'board'; topic: Topic; mode: Mode; region: Region };
 
 export function parseRoute(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '') || '/';
   if (path === '/signin') return { name: 'signin' };
   if (path === '/me') return { name: 'me' };
-  const board = /^\/leaderboards(?:\/([a-z]+)\/([a-z-]+))?$/.exec(path);
+  const board = /^\/leaderboards(?:\/(flags|capitals))?(?:\/([a-z]+)\/([a-z-]+))?$/.exec(path);
   if (board) {
-    const mode = (board[1] ?? 'type') as Mode;
-    const region = (board[2] ?? 'world') as Region;
-    if (BOARD_MODES.includes(mode) && BOARD_REGIONS.includes(region)) return { name: 'board', mode, region };
+    const topic = (board[1] ?? 'countries') as Topic;
+    const mode = (board[2] ?? 'type') as Mode;
+    const region = (board[3] ?? 'world') as Region;
+    if (BOARD_MODES.includes(mode) && BOARD_REGIONS.includes(region)) return { name: 'board', topic, mode, region };
   }
   return { name: 'home' };
 }
 
 export function routePath(route: Route): string {
-  if (route.name === 'board') return `/leaderboards/${route.mode}/${route.region}`;
+  if (route.name === 'board') return `/leaderboards/${route.topic === 'countries' ? '' : `${route.topic}/`}${route.mode}/${route.region}`;
   return route.name === 'home' ? '/' : `/${route.name}`;
 }
 

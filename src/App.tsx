@@ -14,7 +14,7 @@ import { FACTS } from './data/facts.ts';
 import { flagChoices } from './game/flagChoices.ts';
 import { clueFor } from './game/hints.ts';
 import type { LogEntry } from './game/log.ts';
-import { boardFor, parseBoard, type Board } from './game/ranking.ts';
+import { boardFor, boardKey, parseBoard, type Board } from './game/ranking.ts';
 import { groupOf, progressRows } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
@@ -373,8 +373,7 @@ export function App() {
   }
 
   const openBoard = (board: Board) => {
-    const { mode, region } = parseBoard(board)!;
-    go({ name: 'board', mode, region });
+    go({ name: 'board', ...parseBoard(board)! });
   };
 
   async function start(config: GameConfig = draft) {
@@ -564,7 +563,7 @@ export function App() {
       );
     }
     if (route.name === 'board') {
-      return <Leaderboard mode={route.mode} region={route.region} onPick={(mode, region) => go({ name: 'board', mode, region }, { replace: true })} onClose={home} />;
+      return <Leaderboard topic={route.topic} mode={route.mode} region={route.region} onPick={(topic, mode, region) => go({ name: 'board', topic, mode, region }, { replace: true })} onClose={home} />;
     }
     if (route.name === 'me' && user) return <YourGames user={user} onBoard={openBoard} onClose={home} onSignedOut={() => setUser(null)} />;
     if ((route.name === 'me' || route.name === 'signin') && !user) return <SignInCard onSignIn={beginSignIn} onClose={home} />;
@@ -628,7 +627,7 @@ export function App() {
           <div className="corner">
             <Wordmark />
             <div className="corner-actions">
-              <button type="button" className="btn" aria-label="Leaderboards" onClick={() => openBoard(draftBoard ?? 'type:world')}>
+              <button type="button" className="btn" aria-label="Leaderboards" onClick={() => openBoard(draftBoard ?? boardKey(topicOf(draft), 'type', 'world'))}>
                 <Icon name="trophy" size={15} />
                 <span className="btn-label">Leaderboards</span>
               </button>
@@ -636,7 +635,7 @@ export function App() {
                 <UserMenu
                   user={user}
                   onGames={() => go({ name: 'me' })}
-                  onBoards={() => openBoard(draftBoard ?? 'type:world')}
+                  onBoards={() => openBoard(draftBoard ?? boardKey(topicOf(draft), 'type', 'world'))}
                   onPickName={() => setCard('name')}
                   onSignOut={() => {
                     void signOut();
@@ -788,6 +787,7 @@ export function App() {
             </div>
           )}
           <ReviewPanel
+            topic={topic}
             pool={state.pool}
             missed={state.missed}
             hovered={hovered}
