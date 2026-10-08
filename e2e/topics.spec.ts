@@ -89,11 +89,13 @@ test('capitals · type: a capital lights up its country', async ({ page }) => {
   await chooseTopic(page, 'Capitals');
   await page.getByRole('button', { name: /^S\. America/ }).click();
   await start(page);
-  await expect(page.getByLabel('Country name')).toHaveAttribute('placeholder', 'Type a capital…');
-  await typeLikeAPerson(page, ['lima', 'quito']);
+  const input = page.getByRole('textbox');
+  await expect(input).toHaveAccessibleName('Capital');
+  await expect(input).toHaveAttribute('placeholder', 'Type a capital…');
+  await typeLikeAPerson(page, ['lima', 'quito'], 'Capital');
   await expect(page.locator('.topbar .score')).toHaveText('2 / 12');
   await expect(page.getByRole('status').filter({ hasText: 'Quito · Ecuador' })).toBeVisible();
-  await typeLikeAPerson(page, ['nairobi']);
+  await typeLikeAPerson(page, ['nairobi'], 'Capital');
   await expect(page.locator('.toast')).toContainText("Nairobi is Kenya's capital, which isn't in this quiz");
   expect(errors).toEqual([]);
 });

@@ -718,6 +718,7 @@ export function App() {
                   ref={inputRef}
                   value={guess.value}
                   placeholder={placeholder}
+                  label={rules.answer === 'capital' ? 'Capital' : 'Country name'}
                   shakeSeq={guess.shakeSeq}
                   targetId={rules.ordered ? goal : null}
                   onChange={guess.onChange}
