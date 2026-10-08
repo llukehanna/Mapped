@@ -31,7 +31,7 @@ export function ThemeToggle({ theme, onToggle }: { theme: 'dark' | 'light'; onTo
 /** Opens the central "Give up?" dialog; it never ends the game by itself. */
 export function GiveUpButton({ onGiveUp }: { onGiveUp: () => void }) {
   return (
-    <button type="button" className="tb-btn" onClick={onGiveUp}>
+    <button type="button" className="tb-btn" onClick={onGiveUp} title="Give up (Esc)">
       <Icon name="flag" />
       <span className="tb-label">Give up</span>
     </button>
@@ -46,11 +46,9 @@ interface TopBarProps {
   total: number;
   clock: string;
   clockLevel: '' | 'warn' | 'crit';
-  paused: boolean;
   theme: 'dark' | 'light';
   onTheme: () => void;
   onHint: () => void;
-  onPause: () => void;
   onGiveUp: () => void;
   onMenu: () => void;
 }
@@ -77,11 +75,6 @@ export function TopBar(p: TopBarProps) {
           <Icon name="hint" />
           <span className="tb-label">Hint</span>
           <kbd>?</kbd>
-        </button>
-        <button type="button" className="tb-btn" onClick={p.onPause} title="Pause (Esc)">
-          <Icon name={p.paused ? 'play' : 'pause'} />
-          <span className="tb-label">{p.paused ? 'Resume' : 'Pause'}</span>
-          <kbd>Esc</kbd>
         </button>
         <GiveUpButton onGiveUp={p.onGiveUp} />
         <ThemeToggle theme={p.theme} onToggle={p.onTheme} />
