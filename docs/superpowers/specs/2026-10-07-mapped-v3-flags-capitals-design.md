@@ -112,3 +112,13 @@ The letter rungs are the existing `letterPattern`/`letterCount` helpers, applied
 ## Out of scope
 
 Study/flashcard mode, difficulty levels, multiple-choice for anything but Flags · Identify, territories' flags or capitals.
+
+## Revisions during implementation
+
+- `scripts/check-size.ts` budgets `flags/` separately (at most 250 files, 3 MB total, 256 KB per flag) because flags load one per question, not with the page. The app keeps its 1.5 MB / 1 MB per file / 100 files budget.
+- The game seed is kept on the saved run (`Run.seed`, optional) so Flags · Identify shows the same four flags after a reload. Offline games use the game's start time.
+- The answer box is announced to screen readers as "Capital" in Capitals games ("Country name" otherwise).
+- When a target is revealed (skipped or out of tries), Flags and Capitals say "It was …". Countries keeps its existing wording.
+- In Flags · Identify a wrong pick briefly lights up that flag's country on the map, which teaches whose flag it was without giving away the target.
+- India also accepts "Delhi".
+- The README describes the topics.

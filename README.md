@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/llukehanna/Mapped/actions/workflows/ci.yml/badge.svg)](https://github.com/llukehanna/Mapped/actions/workflows/ci.yml)
 
-How well do you know the map? Name every country, find them by clicking, or identify the highlighted one. Live at [mapped.lukeghanna.com](https://mapped.lukeghanna.com).
+How well do you know the map? Name every country, find them by clicking, or identify the highlighted one. Pick a topic: Countries, Flags (a flag, name its country) or Capitals (a capital, name its country, or the other way round). Live at [mapped.lukeghanna.com](https://mapped.lukeghanna.com).
 
 Anyone can play. Sign in with Google to save your games and get on the leaderboards.
 
@@ -12,11 +12,13 @@ Anyone can play. Sign in with Google to save your games and get on the leaderboa
 - **Locate**: you're given a name; click the country. You get 3 tries.
 - **Identify**: a country lights up; type its name.
 
+The modes work on every topic. In Flags, Type shows a flag and you name its country, Locate asks you to click the flag's country, and Identify lights up a country and offers four flags. In Capitals, Type is naming every capital, Locate gives you a capital and you click its country, and Identify names the lit-up country's capital.
+
 Pick any mix of continents and subregions, and a time limit (or none, for a stopwatch).
 
 ## Leaderboards
 
-There are 21 boards: each mode for the World and for each continent. Boards rank by most countries found, then fewest hints, then fastest time, so unfinished runs count too (a run that found nothing doesn't). Signing in adds this browser's earlier games to your account, plus any bests it saved before accounts existed (unranked). Your games shows your best run on each board even if you didn't finish it: most countries found, then fewest hints, then fastest.
+There are 63 boards: 3 topics × 3 modes × 7 regions (the World and each continent). Boards rank by most countries found, then fewest hints, then fastest time, so unfinished runs count too (a run that found nothing doesn't). Signing in adds this browser's earlier games to your account, plus any bests it saved before accounts existed (unranked). Your games shows your best run on each board even if you didn't finish it: most countries found, then fewest hints, then fastest.
 
 The server keeps the score honest:
 
@@ -48,6 +50,7 @@ npm run dev
 | `npm run e2e` | Playwright end-to-end tests against the real Worker (builds first) |
 | `npm run dev:full` | The whole app locally, with a local D1 and fake sign-in |
 | `npm run geo` | Rebuild `src/data/world.topo.json` from Natural Earth |
+| `npm run build-flags` | Rebuild the self-hosted flag SVGs in `public/flags/` from flag-icons |
 | `npm run build` | Typecheck, build, enforce the size budget |
 | `npm run deploy` | Build, apply database migrations, deploy to Cloudflare |
 | `npm run recompute-bests -- --remote` | Rebuild bests after deleting games by hand |
