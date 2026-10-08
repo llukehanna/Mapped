@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { FACTS } from '../../src/data/facts.ts';
 import { GEO_META } from '../../src/data/geoMeta.ts';
 import { COUNTRY, nameOf } from '../../src/data/lookup.ts';
-import { clueText, HINT_LEVELS, letterCount, letterPattern } from '../../src/game/hints.ts';
+import { clueFor, clueText, letterCount, letterPattern } from '../../src/game/hints.ts';
+import { hintLevels } from '../../src/game/topics.ts';
 
 const clue = (mode: 'type' | 'identify' | 'locate', level: number, id: string) =>
   clueText(mode, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
 
 describe('hint ladder', () => {
   it('has four rungs for naming modes and three for locate', () => {
-    expect(HINT_LEVELS).toEqual({ type: 4, identify: 4, locate: 3 });
+    expect((['type', 'identify', 'locate'] as const).map((mode) => hintLevels({ mode }))).toEqual([4, 4, 3]);
   });
 
   it('naming modes spell the name out: first letter, length, last letter, every other letter', () => {
@@ -43,5 +44,24 @@ describe('letters', () => {
     expect(letterCount('Chad')).toBe('4 letters');
     expect(letterCount('Guinea-Bissau')).toBe('6 + 6 letters');
     expect(letterCount("Côte d'Ivoire")).toBe('4 + 7 letters');
+  });
+});
+
+describe('clues by topic', () => {
+  const input = (id: string) => ({ country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
+  it('capitals spell the capital', () => {
+    expect(clueFor({ mode: 'type', topic: 'capitals' }, 1, input('KEN'))).toBe('Starts with N');
+    expect(clueFor({ mode: 'identify', topic: 'capitals' }, 2, input('KEN'))).toBe('N _ _ _ _ _ _ · 7 letters');
+  });
+  it('flags · type spells the country; locate rungs for clicking', () => {
+    expect(clueFor({ mode: 'type', topic: 'flags' }, 1, input('KEN'))).toBe('Starts with K');
+    expect(clueFor({ mode: 'locate', topic: 'capitals' }, 3, input('KEN'))).toBe('Look inside the circle');
+  });
+  it('flags · identify rungs say how many flags are left', () => {
+    expect(clueFor({ mode: 'identify', topic: 'flags' }, 1, input('KEN'))).toBe('One wrong flag removed');
+    expect(clueFor({ mode: 'identify', topic: 'flags' }, 2, input('KEN'))).toBe('Two wrong flags removed');
+  });
+  it('countries unchanged', () => {
+    for (const mode of ['type', 'locate', 'identify'] as const) for (const lvl of [1, 2, 3]) expect(clueFor({ mode }, lvl, input('KEN'))).toBe(clueText(mode, lvl, input('KEN')));
   });
 });

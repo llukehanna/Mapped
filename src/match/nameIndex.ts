@@ -12,7 +12,9 @@ export interface NameIndex {
   territories: ReadonlySet<string>;
 }
 
-export function buildIndex(countries: readonly CountryDef[], territories: readonly TerritoryDef[]): NameIndex {
+type Named = Pick<CountryDef, 'id' | 'name' | 'aliases'>;
+
+export function buildIndex(countries: readonly Named[], territories: readonly TerritoryDef[]): NameIndex {
   const byKey = new Map<string, string>();
   const keysOf = new Map<string, string[]>();
   for (const entry of [...countries, ...territories]) {
