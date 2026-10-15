@@ -1,5 +1,6 @@
 const PATHS = {
   pause: 'M9 6v12M15 6v12',
+  stop: 'M7 7h10v10H7z',
   play: 'M8 5.5v13l11-6.5z',
   hint: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
   flag: 'M5 21V4M5 4h11l-2 4 2 4H5',

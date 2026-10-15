@@ -86,6 +86,19 @@ kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--mute); bord
 .choice.wrong { border-color: color-mix(in srgb, var(--danger) 55%, transparent); animation: shake 360ms var(--ease); }
 .capital-choice.wrong .choice-name { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 70%, transparent); }
 
+/* Flags · Learn: one flag, the answer line, four country names (2×2 on phones). */
+.learn-card { width: 100%; padding: 12px; display: grid; justify-items: center; gap: 10px; background: var(--panel-bg); animation: toast-in 240ms var(--ease); }
+.learn-flag { width: 240px; }
+.learn-line { width: 100%; min-height: 36px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; padding: 0 4px; font-size: 15px; font-weight: 500; text-align: center; }
+.learn-line.right { color: var(--accent); }
+.learn-continue { min-height: 34px; padding: 4px 12px; }
+.learn-grid { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.learn-choice { align-content: center; min-height: 58px; padding: 8px 6px 6px; }
+.learn-choice.right { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: var(--accent-soft); color: var(--accent); }
+.learn-choice.wrong .choice-name { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 70%, transparent); }
+.learn-choice.right:disabled, .learn-choice.wrong:disabled { opacity: 1; }
+.score-label { font-family: var(--font-ui); font-size: 13px; color: var(--mute); }
+
 .toast { padding: 8px 14px; border-radius: 999px; font-size: 13.5px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; animation: toast-in 240ms var(--ease); }
 .toast.good { color: var(--accent); }
 .toast.warn { color: var(--danger); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hardest, LEARN_STREAK, learnReduce, REQUEUE_AFTER } from '../../src/game/learn.ts';
+import { hardest, LEARN_STREAK, learnReduce, REQUEUE_AFTER, roundFor } from '../../src/game/learn.ts';
 import type { LearnState } from '../../src/game/learn.ts';
 
 const POOL = ['A', 'B', 'C', 'D', 'E'];
@@ -115,5 +115,13 @@ describe('hardest', () => {
     expect(hardest(s)).toHaveLength(3);
     expect(hardest(s, 1)).toEqual(['C']);
     expect(hardest(start())).toEqual([]);
+  });
+});
+
+describe('roundFor', () => {
+  it('leaves out learned flags, or takes them all once every one is learned', () => {
+    expect(roundFor(['A', 'B', 'C'], new Set(['B', 'X']))).toEqual(['A', 'C']);
+    expect(roundFor(['A', 'B'], new Set(['A', 'B']))).toEqual(['A', 'B']);
+    expect(roundFor(['A', 'B'], new Set())).toEqual(['A', 'B']);
   });
 });

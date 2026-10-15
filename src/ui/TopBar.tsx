@@ -10,9 +10,11 @@ export function Wordmark() {
   );
 }
 
-export function Score({ found, total }: { found: number; total: number }) {
+/** `label` goes before the count ("Learned 12 / 45"); without one it reads as found. */
+export function Score({ found, total, label }: { found: number; total: number; label?: string }) {
   return (
-    <div className="score mono" aria-label={`${found} of ${total} found`}>
+    <div className="score mono" aria-label={label ? `${label} ${found} of ${total}` : `${found} of ${total} found`}>
+      {label && <span className="score-label">{label} </span>}
       <b>{found}</b>
       <span className="mute"> / {total}</span>
     </div>
@@ -38,20 +40,33 @@ export function GiveUpButton({ onGiveUp }: { onGiveUp: () => void }) {
   );
 }
 
-interface TopBarProps {
+/** Ends a Learn round straight away (progress is already saved). */
+export function StopButton({ onStop }: { onStop: () => void }) {
+  return (
+    <button type="button" className="tb-btn" onClick={onStop} title="Stop (Esc)">
+      <Icon name="stop" />
+      <span className="tb-label">Stop</span>
+    </button>
+  );
+}
+
+type TopBarProps = {
   pill: string;
   /** this run can go on a leaderboard */
   ranked: boolean;
   found: number;
   total: number;
+  /** before the count, e.g. "Learned" */
+  scoreLabel?: string;
   clock: string;
   clockLevel: '' | 'warn' | 'crit';
   theme: 'dark' | 'light';
   onTheme: () => void;
-  onHint: () => void;
-  onGiveUp: () => void;
-  onMenu: () => void;
-}
+} & (
+  | { onHint: () => void; onGiveUp: () => void; onMenu: () => void; onStop?: undefined }
+  /** Flags · Learn: Stop and the theme, on phones too; no hint, no menu */
+  | { onStop: () => void; onHint?: undefined; onGiveUp?: undefined; onMenu?: undefined }
+);
 
 export function TopBar(p: TopBarProps) {
   return (
@@ -64,24 +79,33 @@ export function TopBar(p: TopBarProps) {
         </span>
       )}
       <div className="tb-spacer" />
-      <Score found={p.found} total={p.total} />
+      <Score found={p.found} total={p.total} label={p.scoreLabel} />
       <div className="tb-divider" />
       <div className={`clock mono ${p.clockLevel}`} role="timer" aria-live="off">
         {p.clock}
       </div>
       <div className="tb-spacer" />
-      <div className="hide-sm tb-actions">
-        <button type="button" className="tb-btn" onClick={p.onHint} title="Hint (?)">
-          <Icon name="hint" />
-          <span className="tb-label">Hint</span>
-          <kbd>?</kbd>
-        </button>
-        <GiveUpButton onGiveUp={p.onGiveUp} />
-        <ThemeToggle theme={p.theme} onToggle={p.onTheme} />
-      </div>
-      <button type="button" className="tb-btn show-sm" onClick={p.onMenu} aria-label="Menu">
-        <Icon name="menu" />
-      </button>
+      {p.onStop ? (
+        <div className="tb-actions">
+          <StopButton onStop={p.onStop} />
+          <ThemeToggle theme={p.theme} onToggle={p.onTheme} />
+        </div>
+      ) : (
+        <>
+          <div className="hide-sm tb-actions">
+            <button type="button" className="tb-btn" onClick={p.onHint} title="Hint (?)">
+              <Icon name="hint" />
+              <span className="tb-label">Hint</span>
+              <kbd>?</kbd>
+            </button>
+            <GiveUpButton onGiveUp={p.onGiveUp} />
+            <ThemeToggle theme={p.theme} onToggle={p.onTheme} />
+          </div>
+          <button type="button" className="tb-btn show-sm" onClick={p.onMenu} aria-label="Menu">
+            <Icon name="menu" />
+          </button>
+        </>
+      )}
     </header>
   );
 }

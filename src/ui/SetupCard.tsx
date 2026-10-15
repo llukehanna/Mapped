@@ -58,28 +58,52 @@ interface SetupCardProps {
   /** functional, so quick successive clicks never work from a stale config */
   onChange: (update: (config: GameConfig) => GameConfig) => void;
   onStart: () => void;
+  /** Flags only: Learn (practice, not ranked) instead of Play. Not saved, not in the URL. */
+  learn: boolean;
+  onLearn: (on: boolean) => void;
+  /** of the selected region's flags, how many are learned on this browser */
+  learned: number;
+  onResetLearned: () => void;
 }
 
-export function SetupCard({ config, best, serverBest, onChange, onStart }: SetupCardProps) {
+export function SetupCard({ config, best, serverBest, onChange, onStart, learn: learnOn, onLearn, learned, onResetLearned }: SetupCardProps) {
   const [showSubs, setShowSubs] = useState(config.scope.subregions.length > 0);
   const scope = config.scope;
   const total = countIn(scope);
   const board = boardFor(config);
   const topic = topicOf(config);
+  const learn = learnOn && topic === 'flags';
   const setScope = (update: (scope: Scope) => Scope) => onChange((c) => ({ ...c, scope: update(c.scope) }));
+  // Learn is for Flags only: another topic goes back to Play.
+  const pickTopic = (t: Topic) => {
+    onChange((c) => withTopic(c, t));
+    if (t !== 'flags') onLearn(false);
+  };
 
   return (
     <section className="setup glass" aria-label="Game setup">
       <div>
         <h1 className="setup-title">How well do you know the map?</h1>
-        <p className="mute setup-sub">Pick a topic, regions, a mode and a time limit.</p>
+        <p className="mute setup-sub">
+          {learn ? 'Practice flags at your own pace: two right in a row and a flag is learned.' : 'Pick a topic, regions, a mode and a time limit.'}
+        </p>
       </div>
+
+      {topic === 'flags' && (
+        <div className="seg play-learn" role="radiogroup" aria-label="Play or learn">
+          {[false, true].map((on) => (
+            <button key={String(on)} type="button" role="radio" aria-checked={learn === on} className={learn === on ? 'on' : ''} onClick={() => onLearn(on)}>
+              {on ? 'Learn' : 'Play'}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div>
         <div className="label">Topic</div>
         <div className="chips" role="group" aria-label="Topic">
           {TOPICS.map((t) => (
-            <button key={t} type="button" className={`chip ${topic === t ? 'on' : ''}`} aria-pressed={topic === t} onClick={() => onChange((c) => withTopic(c, t))}>
+            <button key={t} type="button" className={`chip ${topic === t ? 'on' : ''}`} aria-pressed={topic === t} onClick={() => pickTopic(t)}>
               {TOPIC_LABEL[t]}
             </button>
           ))}
@@ -130,7 +154,7 @@ export function SetupCard({ config, best, serverBest, onChange, onStart }: Setup
         )}
       </div>
 
-      <div>
+      <div hidden={learn}>
         <div className="label">Mode</div>
         <div className="modes" role="radiogroup" aria-label="Mode">
           {MODES.map((m) => (
@@ -149,7 +173,7 @@ export function SetupCard({ config, best, serverBest, onChange, onStart }: Setup
         </div>
       </div>
 
-      <div>
+      <div hidden={learn}>
         <div className="label">Time limit</div>
         <div className="seg" role="radiogroup" aria-label="Time limit">
           {TIME_LIMITS.map((t) => (
@@ -167,7 +191,27 @@ export function SetupCard({ config, best, serverBest, onChange, onStart }: Setup
         </div>
       </div>
 
-      <div className="best">
+      {learn && (
+        <div className="best">
+          <span>{total} countries · Practice · not ranked</span>
+          <span>
+            <b>
+              {learned} / {total}
+            </b>{' '}
+            learned
+            {learned > 0 && (
+              <>
+                {' · '}
+                <button type="button" className="link-btn learn-reset" onClick={onResetLearned}>
+                  Reset
+                </button>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="best" hidden={learn}>
         <span>
           {total} countries · {board ? <RankedTag text={`${boardLabel(board)} board`} /> : <span>Unranked: custom regions</span>}
         </span>
@@ -193,7 +237,7 @@ export function SetupCard({ config, best, serverBest, onChange, onStart }: Setup
       </div>
 
       <button type="button" className="start" onClick={onStart}>
-        Start <kbd>↵</kbd>
+        {learn ? 'Start learning' : 'Start'} <kbd>↵</kbd>
       </button>
     </section>
   );
