@@ -65,6 +65,7 @@ export function clueFor(config: Pick<GameConfig, 'mode' | 'topic'>, level: numbe
   const { answer } = rulesFor(config);
   if (answer === 'click') return clueText('locate', level, input);
   if (answer === 'flag') return level === 1 ? 'One wrong flag removed' : 'Two wrong flags removed';
+  if (answer === 'capitalPick') return level === 1 ? 'One wrong capital removed' : 'Two wrong capitals removed';
   if (topicOf(config) === 'flags' && config.mode === 'type') {
     return level === 1 ? `In ${input.country.subregion}` : clueText('identify', level - 1, input);
   }

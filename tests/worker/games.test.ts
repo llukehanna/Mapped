@@ -55,7 +55,7 @@ it('topic board routes', async () => {
 it('your recent games carry their topic', async () => {
   const ana = await signIn(env, 'ana@example.com', 'meridian');
   await playGame(ana);
-  await playGame(ana, { config: { ...SOUTH_AMERICA, topic: 'capitals' } });
+  await playGame(ana, { config: { ...SOUTH_AMERICA, topic: 'capitals' }, moves: (s, now) => ({ type: 'found', id: target(s)!, now }) });
   const mine: MyGamesResponse = await (await call(env, 'GET', '/api/me/games', { cookie: ana })).json();
   expect(mine.recent.map((g) => g.topic)).toEqual(['capitals', 'countries']);
 });
@@ -380,5 +380,30 @@ describe('leaderboards and your games', () => {
     const sql = readFileSync(new URL('../../scripts/recompute-bests.sql', import.meta.url), 'utf8');
     await db.batch(statements(sql).map((s) => db.prepare(s)));
     expect((await board()).rows).toMatchObject([{ name: 'meridian', ms: 30_000 }]);
+  });
+});
+
+describe('0005_retire_old_capitals', () => {
+  it('retires capitals · type and identify runs and their bests, nothing else', async () => {
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    const named = (): Move => (s, now) => ({ type: 'found', id: target(s)!, now });
+    const cap = (mode: GameConfig['mode']): GameConfig => ({ ...SOUTH_AMERICA, topic: 'capitals', mode });
+    const type = await playGame(ana, { config: cap('type'), moves: named() });
+    const identify = await playGame(ana, { config: cap('identify'), moves: named() });
+    const locate = await playGame(ana, { config: cap('locate'), moves: clickTarget });
+    const flags = await playGame(ana, { config: { ...SOUTH_AMERICA, topic: 'flags' }, moves: named() });
+    for (const g of [type, identify, locate, flags]) expect(g.result.ranked).toBe(true);
+    const boards = async () => ((await db.prepare('SELECT board FROM bests ORDER BY board').all()).results as { board: string }[]).map((r) => r.board);
+    expect(await boards()).toEqual(['capitals:identify:south-america', 'capitals:locate:south-america', 'capitals:type:south-america', 'flags:type:south-america']);
+
+    const sql = readFileSync(new URL('../../migrations/0005_retire_old_capitals.sql', import.meta.url), 'utf8');
+    await db.batch(statements(sql).map((s) => db.prepare(s)));
+
+    const row = async (id: string) => db.prepare('SELECT ranked, unranked_reason AS reason FROM games WHERE id = ?').bind(id).first();
+    expect(await row(type.game.id)).toEqual({ ranked: 0, reason: 'retired' });
+    expect(await row(identify.game.id)).toEqual({ ranked: 0, reason: 'retired' });
+    expect(await row(locate.game.id)).toEqual({ ranked: 1, reason: null });
+    expect(await row(flags.game.id)).toEqual({ ranked: 1, reason: null });
+    expect(await boards()).toEqual(['capitals:locate:south-america', 'flags:type:south-america']);
   });
 });

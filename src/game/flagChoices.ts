@@ -4,7 +4,7 @@ import { COUNTRY } from '../data/lookup.ts';
 import { seededRandom, shuffle } from './rng.ts';
 
 /** A stable number for a country id, so each target gets its own choices from one game seed. */
-const idHash = (id: string) => [...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+export const idHash = (id: string) => [...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
 /**
  * The 4 flags offered in Flags · Identify: the target and 3 others, lookalikes first, then the same subregion, the same

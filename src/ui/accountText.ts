@@ -16,6 +16,7 @@ export const REASON_TEXT: Record<UnrankedReason, string> = {
   unverified: "couldn't verify",
   anonymous: 'not signed in',
   imported: 'played before accounts',
+  retired: 'older rules',
 };
 
 /** "m•••@gmail.com" */

@@ -51,7 +51,11 @@ describe('clues by topic', () => {
   const input = (id: string) => ({ country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
   it('capitals spell the capital', () => {
     expect(clueFor({ mode: 'type', topic: 'capitals' }, 1, input('KEN'))).toBe('Starts with N');
-    expect(clueFor({ mode: 'identify', topic: 'capitals' }, 2, input('KEN'))).toBe('N _ _ _ _ _ _ · 7 letters');
+    expect(clueFor({ mode: 'type', topic: 'capitals' }, 2, input('KEN'))).toBe('N _ _ _ _ _ _ · 7 letters');
+  });
+  it('capitals · identify rungs say how many capitals are left', () => {
+    expect(clueFor({ mode: 'identify', topic: 'capitals' }, 1, input('KEN'))).toBe('One wrong capital removed');
+    expect(clueFor({ mode: 'identify', topic: 'capitals' }, 2, input('KEN'))).toBe('Two wrong capitals removed');
   });
   it('flags · type: region first, then the letter rungs', () => {
     const flagsType = { mode: 'type' as const, topic: 'flags' as const };
