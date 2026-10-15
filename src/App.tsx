@@ -312,7 +312,7 @@ export function App() {
       window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
     }
     const resume = takeResume(session, Date.now());
-    if (resume?.state.phase === 'review' && keys.current.state.phase === 'setup') {
+    if (resume?.state.phase === 'review' && keys.current.state.phase === 'setup' && !keys.current.learnOn) {
       finished.current = resume.state.startedAt;
       currentRun.current = resume.run?.id ?? null;
       dispatch({ type: 'restore', state: { ...resume.state, event: null } });

@@ -57,6 +57,31 @@ describe('bests', () => {
   });
 });
 
+describe('capitals bests under the new rules', () => {
+  const cap = (mode: GameConfig['mode']): GameConfig => ({ topic: 'capitals', mode, scope: { continents: ['africa'], subregions: [] }, timeLimitSec: null });
+  it('type and identify use a fresh v2 key, so old results are ignored', () => {
+    expect(bestKey(cap('type'))).toBe('mapped:best:v2:capitals:type:africa:none');
+    expect(bestKey(cap('identify'))).toBe('mapped:best:v2:capitals:identify:africa:none');
+    expect(bestKey(cap('locate'))).toBe('mapped:best:v1:capitals:locate:africa:none');
+    const s = new MemoryStorage();
+    s.setItem('mapped:best:v1:capitals:type:africa:none', JSON.stringify(r(99, 1000)));
+    s.setItem('mapped:best:v1:capitals:identify:africa:none', JSON.stringify(r(99, 1000)));
+    expect(readBest(s, cap('type'))).toBeNull();
+    expect(readBest(s, cap('identify'))).toBeNull();
+    recordResult(s, cap('type'), r(5, 1000));
+    expect(readBest(s, cap('type'))).toEqual(r(5, 1000));
+  });
+  it('localBests still reads only v1 countries keys', () => {
+    const s = new MemoryStorage();
+    recordResult(s, cap('type'), r(5, 1000));
+    recordResult(s, cap('identify'), r(5, 1000));
+    recordResult(s, cap('locate'), r(5, 1000));
+    s.setItem('mapped:best:v1:capitals:type:africa:none', JSON.stringify(r(99, 1000)));
+    recordResult(s, config, r(80, 700_000));
+    expect(localBests(s)).toEqual([{ config: { mode: 'type', scope: { continents: ['africa', 'europe'], subregions: [] }, timeLimitSec: null }, result: r(80, 700_000) }]);
+  });
+});
+
 describe('localBests', () => {
   const configs: GameConfig[] = [
     config,
