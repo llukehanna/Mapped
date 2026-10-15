@@ -580,9 +580,21 @@ export function App() {
   const rotate = rotationFor(new Set(pool.map((id) => COUNTRY.get(id)!.continent)));
   const shapeList = Array.isArray(shapes) ? shapes : null;
   const allIds = useMemo(() => shapeList?.map((s) => s.id) ?? [], [shapeList]);
+  // Learn: flags learned on this browser fill in like found countries; one that was just learned glows as it fills.
+  const learnedCount = lesson?.learned.length ?? 0;
+  const learnFound = useMemo(() => {
+    if (!learn.session) return null;
+    const known = readLearned(storage);
+    return pool.filter((id) => known.has(id));
+    // learnedCount: a flag was just learned and saved, so read again.
+  }, [learn.session, pool, learnedCount]);
+  const justLearned = lesson?.phase === 'answered' && lesson.last?.right && lesson.learned.at(-1) === lesson.last.target ? lesson.last.target : null;
   const states = useMemo(
-    () => shapeStates(allIds, state.phase, pool, state.found, state.missed, justFound, OWNERS),
-    [allIds, state.phase, pool, state.found, state.missed, justFound],
+    () =>
+      learnFound
+        ? shapeStates(allIds, 'playing', pool, learnFound, [], justLearned, OWNERS)
+        : shapeStates(allIds, state.phase, pool, state.found, state.missed, justFound, OWNERS),
+    [allIds, state.phase, pool, state.found, state.missed, justFound, learnFound, justLearned],
   );
   const markers = useMemo(() => pool.filter((id) => GEO_META[id]?.tiny), [pool]);
   const highlights: Highlight[] = [];

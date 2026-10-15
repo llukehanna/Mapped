@@ -41,7 +41,7 @@ test('flags · learn: practice is opt-in, drills with requeues, and never talks 
 
   await expect(page.locator('.topbar .pill')).toHaveText('S. America · Flags · Learn');
   const stats = page.locator('.topbar .learn-stats');
-  await expect(stats.locator('.score')).toHaveText('0 / 12');
+  await expect(stats.locator('.stat-val').first()).toHaveText('0 / 12');
   await expect(stats).toHaveAttribute('aria-label', '0 of 12 learned, no answers yet, 0 wrong');
   await expect(page.locator('.topbar .clock')).toHaveCount(0);
   await expect(card(page).locator('img.flag')).toBeVisible();
@@ -53,7 +53,7 @@ test('flags · learn: practice is opt-in, drills with requeues, and never talks 
   await expect(card(page)).toContainText(/That's .+ · .+/);
   await expect(page.locator('.learn-choice.right')).toHaveAttribute('data-country-id', first.target);
   await page.getByRole('button', { name: /^Continue/ }).click();
-  await expect(stats.locator('.score')).toHaveText('0 / 12');
+  await expect(stats.locator('.stat-val').first()).toHaveText('0 / 12');
   await expect(stats).toHaveAttribute('aria-label', '0 of 12 learned, 0% right, 1 wrong');
 
   const streak: Record<string, number> = {};
@@ -82,7 +82,10 @@ test('flags · learn: practice is opt-in, drills with requeues, and never talks 
       streak[q.target] = 1;
     }
   }
-  await expect(stats.locator('.score')).toHaveText('1 / 12');
+  await expect(stats.locator('.stat-val').first()).toHaveText('1 / 12');
+  // A learned flag's country fills in on the map, like a found country; the rest stay to do.
+  await expect(page.locator(`path.shape[data-id="${first.target}"]`)).toHaveClass(/\b(just|found)\b/);
+  await expect(page.locator('path.shape.todo')).toHaveCount(11);
 
   // Stop: no confirmation, straight to the summary.
   await page.getByRole('button', { name: 'Stop' }).click();

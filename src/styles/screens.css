@@ -69,10 +69,9 @@
   .show-sm { display: inline-flex !important; }
   .topbar { top: calc(8px + env(safe-area-inset-top)); left: 8px; right: 8px; min-height: 48px; gap: 8px; padding: 4px 4px 4px 12px; }
   .topbar .wordmark { font-size: 0; gap: 0; }
-  .score, .clock, .learn-stats .stat-num { font-size: 17px; }
-  .learn-stats { gap: 4px; }
-  .learn-stats .stat-word { font-size: 12px; }
-  .learn-stats .stat-sep { margin: 0 2px; }
+  .score, .clock { font-size: 17px; }
+  .learn-stats { gap: 12px; }
+  .stat-val { font-size: 16px; }
   .dock { bottom: calc(10px + var(--kb, 0px) + env(safe-area-inset-bottom)); }
   .zoom { display: none; }
   .flag-card .flag { width: 160px; }
@@ -94,14 +93,14 @@
   .change-setup-sm { position: fixed; z-index: 16; left: 12px; top: calc(66px + env(safe-area-inset-top)); background: var(--panel-bg); }
 }
 
-/* Phones: the Learn bar keeps its numbers; "/" and "%" speak for the words they drop, and Stop keeps its icon. */
+/* Narrow phones: Stop keeps its icon so the Learn stats fit; on the narrowest the stats tighten and the theme stays in setup. */
 @media (max-width: 520px) {
-  .learn-stats .stat-word.optional { display: none; }
   .stop-btn .tb-label { display: none; }
 }
 @media (max-width: 400px) {
-  .learn-stats .score, .learn-stats .stat-num { font-size: 15px; }
+  .learn-stats { gap: 9px; }
+  .stat-val { font-size: 15px; }
 }
-@media (max-width: 340px) {
-  .learn-stats .stat-word { display: none; }
+@media (max-width: 360px) {
+  .learn-actions .iconbtn { display: none; }
 }

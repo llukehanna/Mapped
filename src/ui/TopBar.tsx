@@ -28,22 +28,27 @@ export function ThemeToggle({ theme, onToggle }: { theme: 'dark' | 'light'; onTo
   );
 }
 
-/** Flags · Learn: "12 / 45 learned · 86% right · 3 wrong", numbers and words on one baseline. No clock: Learn is untimed. */
+/** Flags · Learn: three small labelled stats (learned, right, wrong) in place of score and clock. Learn is untimed. */
 export function LearnStats({ learned, total, percentRight, wrong }: { learned: number; total: number; percentRight: number | null; wrong: number }) {
-  const percent = percentRight === null ? '—' : `${percentRight}%`;
   return (
-    <div className="learn-stats" aria-label={`${learned} of ${total} learned, ${percentRight === null ? 'no answers yet' : `${percentRight}% right`}, ${wrong} wrong`}>
-      <span className="score mono">
-        <b>{learned}</b>
-        <span className="mute"> / {total}</span>
-      </span>
-      <span className="stat-word optional">learned</span>
-      <span className="stat-sep" aria-hidden="true">·</span>
-      <span className="stat-num mono">{percent}</span>
-      <span className="stat-word optional">right</span>
-      <span className="stat-sep" aria-hidden="true">·</span>
-      <span className={`stat-num mono ${wrong > 0 ? 'wrong' : ''}`}>{wrong}</span>
-      <span className="stat-word">wrong</span>
+    <div className="learn-stats" role="group" aria-label={`${learned} of ${total} learned, ${percentRight === null ? 'no answers yet' : `${percentRight}% right`}, ${wrong} wrong`}>
+      <div className="stat" aria-hidden="true">
+        <span className="stat-key">Learned</span>
+        <span className="stat-val mono">
+          <b>{learned}</b>
+          <span className="mute"> / {total}</span>
+        </span>
+      </div>
+      <i className="tb-divider" aria-hidden="true" />
+      <div className="stat" aria-hidden="true">
+        <span className="stat-key">Right</span>
+        <span className="stat-val mono">{percentRight === null ? '—' : `${percentRight}%`}</span>
+      </div>
+      <i className="tb-divider" aria-hidden="true" />
+      <div className="stat" aria-hidden="true">
+        <span className="stat-key">Wrong</span>
+        <span className={`stat-val mono ${wrong > 0 ? 'bad' : ''}`}>{wrong}</span>
+      </div>
     </div>
   );
 }
@@ -114,7 +119,7 @@ export function TopBar(p: TopBarProps) {
       )}
       <div className="tb-spacer" />
       {p.onStop ? (
-        <div className="tb-actions">
+        <div className="tb-actions learn-actions">
           <StopButton onStop={p.onStop} />
           <ThemeToggle theme={p.theme} onToggle={p.onTheme} />
         </div>
