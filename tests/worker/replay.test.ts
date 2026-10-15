@@ -226,8 +226,14 @@ describe('other topics replay', () => {
     const log = play(config, (s, now) => (wrongOnce ? { type: 'click', id: target(s)!, now } : ((wrongOnce = true), { type: 'click', id: 'ROU', now })));
     expect(verdict(config, log)).toMatchObject({ found: 12, reason: null });
   });
-  it('capitals · type ranks like countries · type', () => {
+  it('capitals · type: found on the named country each step', () => {
     const config = cfg({ topic: 'capitals' });
-    expect(verdict(config, play(config, typeAll))).toMatchObject({ found: 12, reason: null });
+    expect(verdict(config, play(config, (s, now) => ({ type: 'found', id: target(s)!, now })))).toMatchObject({ found: 12, reason: null });
+  });
+  it('capitals · identify: picks by click, wrong picks may be outside the region', () => {
+    const config = cfg({ topic: 'capitals', mode: 'identify' });
+    let wrongOnce = false;
+    const log = play(config, (s, now) => (wrongOnce ? { type: 'click', id: target(s)!, now } : ((wrongOnce = true), { type: 'click', id: 'ROU', now })));
+    expect(verdict(config, log)).toMatchObject({ found: 12, reason: null });
   });
 });

@@ -28,7 +28,7 @@ export interface ImportEntry {
 }
 
 /** 'incomplete' now means nothing was found: unfinished runs rank, behind every run that found more. */
-export type UnrankedReason = 'custom' | 'incomplete' | 'paused' | 'unverified' | 'anonymous' | 'imported';
+export type UnrankedReason = 'custom' | 'incomplete' | 'paused' | 'unverified' | 'anonymous' | 'imported' | 'retired';
 
 export interface User {
   /** null until the player picks one */

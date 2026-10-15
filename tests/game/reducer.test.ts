@@ -225,10 +225,20 @@ describe('topics', () => {
     expect(reduce(s, { type: 'click', id: 'ARG', now: 2000 })).toBe(s);
   });
 
-  it('capitals · type is unordered like countries · type', () => {
-    const s = start({ topic: 'capitals' });
-    expect(target(s)).toBeNull();
-    expect(reduce(s, { type: 'found', id: 'BRA', now: 2000 }).found).toEqual(['BRA']);
+  it('capitals · type is ordered: the named country, typed capital = found on that country', () => {
+    let s = start({ topic: 'capitals' }, ['CHL', 'ARG', 'BRA']);
+    expect(target(s)).toBe('CHL');
+    expect(reduce(s, { type: 'found', id: 'ARG', now: 2000 })).toBe(s);
+    s = reduce(s, { type: 'found', id: 'CHL', now: 2000 });
+    expect(target(s)).toBe('ARG');
+  });
+
+  it('capitals · identify: a pick is a click on any country; wrong costs a try', () => {
+    let s = start({ topic: 'capitals', mode: 'identify' }, ['CHL', 'ARG', 'BRA']);
+    s = reduce(s, { type: 'click', id: 'PER', now: 2000 }); // outside the pool
+    expect(s.triesLeft).toBe(TRIES_PER_TARGET - 1);
+    s = reduce(s, { type: 'click', id: 'CHL', now: 2100 });
+    expect(s.found).toEqual(['CHL']);
   });
 
   it('hint ladders follow the topic', () => {

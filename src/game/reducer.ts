@@ -1,6 +1,6 @@
 import { COUNTRY } from '../data/lookup.ts';
 import { toLogged } from './log.ts';
-import { hintLevels, rulesFor } from './topics.ts';
+import { hintLevels, isPick, rulesFor } from './topics.ts';
 import type { EndReason, GameAction, GameConfig, GameEvent, GameState, Mode } from './types.ts';
 
 export const TRIES_PER_TARGET = 3;
@@ -145,9 +145,9 @@ function step(state: GameState, action: GameAction): GameState {
     case 'click': {
       const goal = target(state);
       const { answer } = rulesFor(state.config);
-      if (!goal || (answer !== 'click' && answer !== 'flag')) return state;
-      // Locate clicks land on the map, so they must be in the game. A flag pick may be any country (lookalikes come from anywhere).
-      if (answer === 'click' ? !state.pool.includes(action.id) : !COUNTRY.has(action.id)) return state;
+      if (!goal || (answer !== 'click' && !isPick(answer))) return state;
+      // Locate clicks land on the map, so they must be in the game. A pick (flag or capital) may be any country (decoys come from anywhere).
+      if (isPick(answer) ? !COUNTRY.has(action.id) : !state.pool.includes(action.id)) return state;
       if (action.id === goal) return markFound(state, goal, action.now);
       const wrong = { ...state, triesLeft: state.triesLeft - 1, event: emit(state, { kind: 'wrong', id: action.id }) };
       return wrong.triesLeft > 0 ? wrong : reveal(wrong, goal, action.now);
