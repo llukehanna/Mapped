@@ -49,7 +49,7 @@ Rungs 2–5 are today's rungs 1–4. Only Flags · Type changes: Flags · Locate
 
 ### Old Capitals runs
 
-Capitals · Type and Capitals · Identify runs played under the old rules are not comparable. A migration marks them `ranked = 0, unranked_reason = 'retired'` and deletes their rows from `bests` (boards `capitals:type:*` and `capitals:identify:*`). They stay in Your games as "Unranked: older rules". Capitals · Locate, Countries and Flags data are untouched. Games of those two modes started before the deploy but finished after it replay against the new rules and fail with "This game couldn't be verified" (rare; accepted).
+Capitals · Type and Capitals · Identify runs played under the old rules are not comparable. A migration marks them `ranked = 0, unranked_reason = 'retired'` and deletes their rows from `bests` (boards `capitals:type:*` and `capitals:identify:*`). They stay in Your games as "Unranked: older rules". Capitals · Locate, Countries and Flags data are untouched. Games of those two modes started before the deploy but finished after it replay against the new rules (rare; accepted). An old-tab Capitals · Type finish fails cleanly (422, and the unfinished row is deleted). An old-tab Capitals · Identify finish logs `found` on the target, which the new reducer accepts, so it verifies and ranks unless the player used more than 2 hint rungs (422). Both are harmless because the old modes were harder.
 
 ## 3. Flags · Learn
 

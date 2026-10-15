@@ -406,4 +406,20 @@ describe('0005_retire_old_capitals', () => {
     expect(await row(flags.game.id)).toEqual({ ranked: 1, reason: null });
     expect(await boards()).toEqual(['capitals:locate:south-america', 'flags:type:south-america']);
   });
+
+  it('an anonymous capitals · type game retired by the migration stays unranked after it is claimed, and writes no best', async () => {
+    const config: GameConfig = { ...SOUTH_AMERICA, topic: 'capitals', mode: 'type' };
+    const { game, result } = await playGame(undefined, { config, moves: (s, now) => ({ type: 'found', id: target(s)!, now }) });
+    expect(result).toMatchObject({ ranked: false, reason: 'anonymous' });
+
+    const sql = readFileSync(new URL('../../migrations/0005_retire_old_capitals.sql', import.meta.url), 'utf8');
+    await db.batch(statements(sql).map((s) => db.prepare(s)));
+    expect(await db.prepare('SELECT ranked, unranked_reason AS reason FROM games WHERE id = ?').bind(game.id).first()).toEqual({ ranked: 0, reason: 'retired' });
+
+    const ana = await signIn(env, 'ana@example.com', 'meridian');
+    const claimed = await (await call(env, 'POST', '/api/games/claim', { cookie: ana, body: { claims: [{ id: game.id, claim: game.claim }] } })).json();
+    expect(claimed.results).toEqual([expect.objectContaining({ id: game.id, ranked: false, reason: 'retired', newBest: false })]);
+    expect(await db.prepare('SELECT ranked, unranked_reason AS reason FROM games WHERE id = ?').bind(game.id).first()).toEqual({ ranked: 0, reason: 'retired' });
+    expect((await db.prepare('SELECT board FROM bests').all()).results).toEqual([]);
+  });
 });

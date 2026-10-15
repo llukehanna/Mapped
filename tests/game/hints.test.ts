@@ -60,6 +60,7 @@ describe('clues by topic', () => {
   it('flags · type: region first, then the letter rungs', () => {
     const flagsType = { mode: 'type' as const, topic: 'flags' as const };
     expect(clueFor(flagsType, 1, input('TCD'))).toBe('In Central Africa');
+    expect(clueFor(flagsType, 1, input('JAM'))).toBe('In the Caribbean');
     for (const lvl of [2, 3, 4, 5]) expect(clueFor(flagsType, lvl, input('TCD'))).toBe(clueText('identify', lvl - 1, input('TCD')));
   });
   it('capitals · locate uses the locate rungs', () => {

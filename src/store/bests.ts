@@ -15,9 +15,13 @@ export interface Result {
 
 const BEST_PREFIX = 'mapped:best:v1:';
 
+/** Capitals · Type and Identify changed rules in v3.1 (they name the country now), so their bests start over under v2. */
+const NEW_RULES_PREFIX = 'mapped:best:v2:';
+
 export function bestKey(config: GameConfig): string {
   const topic = topicOf(config);
-  return `${BEST_PREFIX}${topic === 'countries' ? '' : `${topic}:`}${config.mode}:${scopeKey(config.scope)}:${config.timeLimitSec ?? 'none'}`;
+  const prefix = topic === 'capitals' && (config.mode === 'type' || config.mode === 'identify') ? NEW_RULES_PREFIX : BEST_PREFIX;
+  return `${prefix}${topic === 'countries' ? '' : `${topic}:`}${config.mode}:${scopeKey(config.scope)}:${config.timeLimitSec ?? 'none'}`;
 }
 
 /** More found wins, then a faster time, then fewer hints. */
