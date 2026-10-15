@@ -12,7 +12,7 @@ test('setup: the topic changes the mode blurbs and the board', async ({ page }) 
   await expect(topics.getByRole('button', { name: 'Countries' })).toHaveAttribute('aria-pressed', 'true');
   await chooseTopic(page, 'Capitals');
   await expect(topics.getByRole('button', { name: 'Capitals' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('radio', { name: /^Type/ })).toContainText('Name every capital');
+  await expect(page.getByRole('radio', { name: /^Type/ })).toContainText("Type the named country's capital");
   await expect(page.locator('.setup')).toContainText('World · Capitals · Type board');
   await chooseTopic(page, 'Countries');
   await expect(page.getByRole('radio', { name: /^Type/ })).toContainText('Name them all, any order');
@@ -119,21 +119,66 @@ test('flags · identify: each hint takes away a wrong flag', async ({ page }) =>
   await expect(page.locator(`.flag-choices button:not(:disabled) img[src="/flags/${target}.svg"]`)).toHaveCount(1);
 });
 
-test('capitals · type: a capital lights up its country', async ({ page }) => {
+test('capitals · type: the country is named; type its capital', async ({ page }) => {
   const errors = watchErrors(page);
   await openSetup(page);
   await chooseTopic(page, 'Capitals');
   await page.getByRole('button', { name: /^S\. America/ }).click();
   await start(page);
+  const target = await page.locator('.guess').getAttribute('data-target-id');
+  const capitals: Record<string, string> = {
+    ARG: 'Buenos Aires', BOL: 'Sucre', BRA: 'Brasilia', CHL: 'Santiago', COL: 'Bogota', ECU: 'Quito',
+    GUY: 'Georgetown', PRY: 'Asuncion', PER: 'Lima', SUR: 'Paramaribo', URY: 'Montevideo', VEN: 'Caracas',
+  };
+  await expect(page.locator('.dock')).toContainText(`Capital of ${SOUTH_AMERICA[target!]}`);
   const input = page.getByRole('textbox');
   await expect(input).toHaveAccessibleName('Capital');
-  await expect(input).toHaveAttribute('placeholder', 'Type a capital…');
-  await typeLikeAPerson(page, ['lima', 'quito'], 'Capital');
-  await expect(page.locator('.topbar .score')).toHaveText('2 / 12');
-  await expect(page.getByRole('status').filter({ hasText: 'Quito · Ecuador' })).toBeVisible();
-  await typeLikeAPerson(page, ['nairobi'], 'Capital');
-  await expect(page.locator('.toast')).toContainText("Nairobi is Kenya's capital, which isn't in this quiz");
+  await expect(input).toHaveAttribute('placeholder', 'Type its capital…');
+  // The named country is lit on the map.
+  await expect(page.locator('path.hl.target')).toHaveCount(1);
+  await typeLikeAPerson(page, [capitals[target!]], 'Capital');
+  await expect(page.locator('.topbar .score')).toHaveText('1 / 12');
   expect(errors).toEqual([]);
+});
+
+test('capitals · identify: pick the capital with the number keys', async ({ page }) => {
+  const errors = watchErrors(page);
+  await openSetup(page);
+  await chooseTopic(page, 'Capitals');
+  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await chooseMode(page, 'Identify');
+  await start(page);
+  const panel = page.locator('.choices');
+  const target = await panel.getAttribute('data-target-id');
+  const ids = await panel.locator('button').evaluateAll((els) => els.map((b) => b.getAttribute('data-country-id')));
+  expect(ids).toHaveLength(4);
+  const right = ids.indexOf(target);
+  expect(right).toBeGreaterThanOrEqual(0);
+  const wrong = ids.findIndex((id) => id !== target);
+  await expect(panel).toContainText(`Capital of ${SOUTH_AMERICA[target!]}`);
+  await page.keyboard.press(String(wrong + 1));
+  await expect(panel.locator('.tries i.on')).toHaveCount(2);
+  await expect(panel.locator('button').nth(wrong)).toBeDisabled();
+  await expect(page.getByRole('status').filter({ hasText: /^No, that's .+ \(.+\)$/ })).toBeVisible();
+  await page.keyboard.press(String(right + 1));
+  await expect(page.locator('.topbar .score')).toHaveText('1 / 12');
+  expect(errors).toEqual([]);
+});
+
+test('capitals · identify: each hint takes away a wrong capital', async ({ page }) => {
+  await openSetup(page);
+  await chooseTopic(page, 'Capitals');
+  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await chooseMode(page, 'Identify');
+  await start(page);
+  const panel = page.locator('.choices');
+  const target = await panel.getAttribute('data-target-id');
+  await page.keyboard.press('?');
+  await expect(panel.locator('button:disabled')).toHaveCount(1);
+  await expect(page.getByRole('region', { name: 'Hints' })).toContainText('One wrong capital removed');
+  await page.keyboard.press('?');
+  await expect(panel.locator('button:disabled')).toHaveCount(2);
+  await expect(panel.locator(`button[data-country-id="${target}"]`)).toBeEnabled();
 });
 
 test('capitals · locate: the prompt names the capital', async ({ page }) => {

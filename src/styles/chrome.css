@@ -69,14 +69,22 @@ kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--mute); bord
 .prompt-flag { width: 64px; }
 .flag-card { padding: 10px; background: var(--panel-bg); animation: toast-in 240ms var(--ease); }
 .flag-card .flag { width: 240px; }
-.flag-choices { width: 100%; padding: 10px 12px 12px; display: grid; gap: 10px; background: var(--panel-bg); }
-.flag-choices-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; font-size: 13.5px; }
-.flag-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.flag-choice { display: grid; justify-items: center; gap: 6px; padding: 6px 6px 5px; border: 1px solid var(--chrome-line); border-radius: 10px; background: transparent; transition: background-color 160ms var(--ease), border-color 160ms var(--ease), opacity 200ms var(--ease); }
-.flag-choice .flag { width: 100%; }
-.flag-choice:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 6%, transparent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
-.flag-choice:disabled { cursor: default; opacity: 0.3; }
-.flag-choice.wrong { border-color: color-mix(in srgb, var(--danger) 55%, transparent); animation: shake 360ms var(--ease); }
+.country-prompt { width: 100%; min-height: 44px; display: flex; align-items: baseline; justify-content: center; gap: 5px; padding: 11px 18px; font-size: 16px; background: var(--panel-bg); animation: toast-in 240ms var(--ease); }
+.country-prompt .prompt-name { flex: 0 1 auto; }
+
+/* Four choices (Flags · Identify: flags; Capitals · Identify: capital names). One row wide, 2×2 on phones. */
+.choices { width: 100%; padding: 10px 12px 12px; display: grid; gap: 10px; background: var(--panel-bg); }
+.choices-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; font-size: 13.5px; }
+.choices-head b { color: var(--ink); font-weight: 600; }
+.choices-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.choice { display: grid; justify-items: center; gap: 6px; padding: 6px 6px 5px; border: 1px solid var(--chrome-line); border-radius: 10px; background: transparent; transition: background-color 160ms var(--ease), border-color 160ms var(--ease), opacity 200ms var(--ease); }
+.choice .flag { width: 100%; }
+.capital-choice { align-content: center; min-height: 64px; padding: 8px 6px 6px; }
+.choice-name { font-size: 14.5px; font-weight: 500; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
+.choice:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 6%, transparent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.choice:disabled { cursor: default; opacity: 0.3; }
+.choice.wrong { border-color: color-mix(in srgb, var(--danger) 55%, transparent); animation: shake 360ms var(--ease); }
+.capital-choice.wrong .choice-name { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 70%, transparent); }
 
 .toast { padding: 8px 14px; border-radius: 999px; font-size: 13.5px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; animation: toast-in 240ms var(--ease); }
 .toast.good { color: var(--accent); }
