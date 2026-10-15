@@ -47,3 +47,25 @@ test('phone: flags · identify fits a 375px screen', async ({ page }) => {
   await choices.nth(0).click();
   expect(errors).toEqual([]);
 });
+
+test('phone: capitals · identify fits a 375px screen', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openSetup(page);
+  await chooseTopic(page, 'Capitals');
+  await chooseMode(page, 'Identify');
+  await start(page);
+  const choices = page.locator('.choices button');
+  await expect(choices).toHaveCount(4);
+  await expect(page.locator('.choices')).toContainText('Capital of');
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(overflow).toBe(false);
+  // Every capital is on screen and tappable.
+  for (const box of await Promise.all((await choices.all()).map((c) => c.boundingBox()))) {
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(375);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  await choices.nth(0).click();
+  expect(errors).toEqual([]);
+});

@@ -11,6 +11,8 @@ import { COUNTRY, nameOf } from './data/lookup.ts';
 import { TERRITORIES } from './data/territories.ts';
 import { formatClock, formatCountdown } from './game/format.ts';
 import { FACTS } from './data/facts.ts';
+import { capitalChoices } from './game/capitalChoices.ts';
+import { removedChoices } from './game/choices.ts';
 import { flagChoices } from './game/flagChoices.ts';
 import { clueFor } from './game/hints.ts';
 import type { LogEntry } from './game/log.ts';
@@ -19,7 +21,7 @@ import { groupOf, progressRows } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
 import { isWorld, poolFor, scopeLabel, WORLD } from './game/scope.ts';
-import { hintLevels, rulesFor, TOPIC_LABEL, topicOf } from './game/topics.ts';
+import { hintLevels, isPick, rulesFor, TOPIC_LABEL, topicOf } from './game/topics.ts';
 import type { GameConfig } from './game/types.ts';
 import { rotationFor, type Rect } from './map/geometry.ts';
 import { useShapes } from './map/useShapes.ts';
@@ -42,7 +44,8 @@ import { Toast, type ToastMessage } from './ui/Toast.tsx';
 import { HintCard } from './ui/HintCard.tsx';
 import { DeleteAccount } from './ui/DeleteAccount.tsx';
 import { FlagCard } from './ui/FlagCard.tsx';
-import { FlagChoices } from './ui/FlagChoices.tsx';
+import { Choices } from './ui/Choices.tsx';
+import { CountryPrompt } from './ui/CountryPrompt.tsx';
 import { Leaderboard } from './ui/Leaderboard.tsx';
 import { NameCard } from './ui/NameCard.tsx';
 import { routePath, useRoute } from './ui/router.ts';
@@ -54,6 +57,10 @@ import { GiveUpButton, Score, ThemeToggle, TopBar, Wordmark } from './ui/TopBar.
 import { useGuess } from './ui/useGuess.ts';
 import { ZoomControls } from './ui/ZoomControls.tsx';
 
+/** How much taller than an input the dock stands with the capital choices (measured 102 px as 2×2 on phones, 62 as one row wide, plus room
+ * for a capital that wraps to two lines), or with the "Capital of" line above the input (44 px and the dock's 10 px gap). */
+const CAPITAL_CHOICES_EXTRA = { small: 110, wide: 70 };
+const COUNTRY_PROMPT_EXTRA = 54;
 const DEFAULT_CONFIG: GameConfig = { mode: 'type', scope: WORLD, timeLimitSec: null };
 const INDEX = buildIndex(COUNTRIES, TERRITORIES);
 /** Territory shape → the country whose color it shares (Greenland → Denmark). */
@@ -70,7 +77,7 @@ const NAME_ASKED = 'mapped:name-asked:v1';
 const SEED = Number(new URLSearchParams(window.location.search).get('seed')) || null;
 const random = SEED ? seededRandom(SEED) : Math.random;
 
-/** Where chrome doesn't cover the map, per screen. The map frames selections inside this. `dock` is how much taller than an input the dock stands (a flag card, flag choices). */
+/** Where chrome doesn't cover the map, per screen. The map frames selections inside this. `dock` is how much taller than an input the dock stands (a flag card, four choices, a "Capital of" line). */
 function safeArea(phase: string, small: boolean, width: number, height: number, keyboard: number, dock = 0): Rect {
   const box = (top: number, right: number, bottom: number, left: number): Rect => ({
     x: left,
@@ -114,10 +121,10 @@ export function App() {
   const [picked, setPicked] = useState<string | null>(null);
   /** Type: Hint was pressed with nothing picked, so the next pick gets the hint. */
   const [wantHint, setWantHint] = useState(false);
-  /** Flags · Identify: flags picked wrongly for the current target (keyed by game and target, so they reset as it moves on). */
-  const [wrongFlags, setWrongFlags] = useState<{ game: number | null; goal: string; ids: string[] } | null>(null);
-  /** Mirrors wrongFlags synchronously, so a second click before the re-render can't spend another try on the same flag. */
-  const wrongFlagsNow = useRef(wrongFlags);
+  /** Pick games (Flags · Identify, Capitals · Identify): choices picked wrongly for the current target (keyed by game and target, so they reset as it moves on). */
+  const [wrongChoices, setWrongChoices] = useState<{ game: number | null; goal: string; ids: string[] } | null>(null);
+  /** Mirrors wrongChoices synchronously, so a second click before the re-render can't spend another try on the same choice. */
+  const wrongChoicesNow = useRef(wrongChoices);
   /** The "Give up?" dialog is open. The clock keeps running behind it. */
   const [confirming, setConfirming] = useState(false);
   const toastSeq = useRef(0);
@@ -148,14 +155,19 @@ export function App() {
   const rules = rulesFor(state.config);
   const goal = target(state);
   const pick = playing && !rules.ordered && picked && !state.found.includes(picked) ? picked : null;
-  /** Seeds the flag choices: the server's seed, or the start time for games played offline. */
+  const picking = isPick(rules.answer);
+  /** The target is lit on the map: Identify games (prompt `map`) and Capitals · Type / Identify (prompt `country`, also named in the dock). */
+  const lit = rules.prompt === 'map' || rules.prompt === 'country';
+  /** Seeds the four choices: the server's seed, or the start time for games played offline. */
   const gameSeed = run?.seed ?? state.startedAt ?? 0;
-  const choices = useMemo(() => (goal && rules.answer === 'flag' ? flagChoices(goal, gameSeed) : []), [goal, rules.answer, gameSeed]);
-  const wrongPicks = wrongFlags && wrongFlags.game === state.startedAt && wrongFlags.goal === goal ? wrongFlags.ids : [];
-  // Each rung of the hint ladder takes away one more wrong flag, in the order they're shown.
-  const flagHints = goal && state.hint?.id === goal && rules.answer === 'flag' ? state.hint.level : 0;
-  const removedFlags = choices.filter((id) => id !== goal && !wrongPicks.includes(id)).slice(0, flagHints);
-  const disabledFlags = [...wrongPicks, ...removedFlags];
+  const choices = useMemo(
+    () => (!goal ? [] : rules.answer === 'flag' ? flagChoices(goal, gameSeed) : rules.answer === 'capitalPick' ? capitalChoices(goal, gameSeed) : []),
+    [goal, rules.answer, gameSeed],
+  );
+  const wrongPicks = wrongChoices && wrongChoices.game === state.startedAt && wrongChoices.goal === goal ? wrongChoices.ids : [];
+  // Each rung of the hint ladder takes away one more wrong choice, in the order they're shown.
+  const choiceHints = goal && state.hint?.id === goal && picking ? state.hint.level : 0;
+  const disabledChoices = goal ? [...wrongPicks, ...removedChoices(choices, goal, wrongPicks, choiceHints)] : [];
   const limitMs = state.config.timeLimitSec === null ? null : state.config.timeLimitSec * 1000;
   const spent = elapsed(state, now);
   const left = limitMs === null ? Infinity : limitMs - spent;
@@ -207,7 +219,8 @@ export function App() {
       else if (!rules.ordered) say(`${name}${row && row.total > 1 ? ` · ${group} ${row.found}/${row.total}` : ''}`, 'good');
     } else if (e.kind === 'wrong') {
       setMapFlash({ id: e.id, kind: 'wrong', label: name, seq: e.seq });
-      setAnnouncement(rules.answer === 'flag' ? `No, that's ${name}'s flag.` : `No, that's ${name}.`);
+      if (rules.answer === 'capitalPick') say(`No, that's ${capitalOf(e.id)} (${name})`, 'warn');
+      else setAnnouncement(rules.answer === 'flag' ? `No, that's ${name}'s flag.` : `No, that's ${name}.`);
     } else if (e.kind === 'revealed') {
       setMapFlash({ id: e.id, kind: 'reveal', label: name, seq: e.seq });
       say(topic === 'countries' ? `That was ${name}` : `It was ${answerName}`, 'warn');
@@ -224,12 +237,12 @@ export function App() {
 
   // Lit-up targets: bring a tiny or off-screen one into view.
   useEffect(() => {
-    if (rules.prompt !== 'map' || state.phase !== 'playing' || !goal) return;
+    if (!lit || state.phase !== 'playing' || !goal) return;
     const id = window.setTimeout(() => {
       if (!mapRef.current?.isVisible(goal, 10)) mapRef.current?.focus(goal, 6);
     }, 120);
     return () => window.clearTimeout(id);
-  }, [goal, rules.prompt, state.phase]);
+  }, [goal, lit, state.phase]);
 
   // Flags: fetch the next target's flag (Identify: its four) while this one is played.
   useEffect(() => {
@@ -395,8 +408,8 @@ export function App() {
     setArmed(null);
     setPicked(null);
     setWantHint(false);
-    wrongFlagsNow.current = null;
-    setWrongFlags(null);
+    wrongChoicesNow.current = null;
+    setWrongChoices(null);
     setTip(null);
     setConfirming(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
@@ -449,30 +462,30 @@ export function App() {
     dispatch({ type: 'click', id, now: Date.now() });
   }
 
-  /** Flags · Identify: a flag button or its number key. A wrong pick stays disabled for this target. */
-  function pickFlag(id: string) {
-    if (state.phase !== 'playing' || !goal || rules.answer !== 'flag' || disabledFlags.includes(id)) return;
+  /** Pick games: a choice button or its number key (a flag, or a capital logged as its country). A wrong pick stays disabled for this target. */
+  function pickChoice(id: string) {
+    if (state.phase !== 'playing' || !goal || !picking || disabledChoices.includes(id)) return;
     // Read the ref, not this render's wrongPicks: a double click lands before the re-render.
-    const prev = wrongFlagsNow.current;
+    const prev = wrongChoicesNow.current;
     const already = prev && prev.game === state.startedAt && prev.goal === goal ? prev.ids : [];
     if (already.includes(id)) return;
     if (id !== goal) {
-      wrongFlagsNow.current = { game: state.startedAt, goal, ids: [...already, id] };
-      setWrongFlags(wrongFlagsNow.current);
+      wrongChoicesNow.current = { game: state.startedAt, goal, ids: [...already, id] };
+      setWrongChoices(wrongChoicesNow.current);
     }
     dispatch({ type: 'click', id, now: Date.now() });
   }
 
-  // Keyboard: Esc give up, ? hint, S skip, 1–4 pick a flag, + − 0 zoom, Enter start/replay, typing goes to the input.
+  // Keyboard: Esc give up, ? hint, S skip, 1–4 pick a choice, + − 0 zoom, Enter start/replay, typing goes to the input.
   const overlay = renderOverlay();
-  const keys = useRef({ state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, choices, pickFlag, blocked: false });
+  const keys = useRef({ state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, choices, pickChoice, blocked: false });
   useLayoutEffect(() => {
-    keys.current = { state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, choices, pickFlag, blocked: overlay !== null };
+    keys.current = { state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, choices, pickChoice, blocked: overlay !== null };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const { state: s, guess: g, start: go, hint: h, askGiveUp: ask, confirming: asking, cancelGiveUp: cancel, choices: flags, pickFlag: pickF, blocked } =
+      const { state: s, guess: g, start: go, hint: h, askGiveUp: ask, confirming: asking, cancelGiveUp: cancel, choices: options, pickChoice: pickC, blocked } =
         keys.current;
       // A card is open over the map: it handles its own keys.
       if (blocked) return;
@@ -498,7 +511,7 @@ export function App() {
       // Games answered by typing have an input; the others take single keys.
       const typing = answer === 'country' || answer === 'capital';
       if (!typing && (e.key === 's' || e.key === 'S')) return void dispatch({ type: 'skip', now: Date.now() });
-      if (answer === 'flag' && /^[1-4]$/.test(e.key) && flags[Number(e.key) - 1]) return void pickF(flags[Number(e.key) - 1]);
+      if (isPick(answer) && /^[1-4]$/.test(e.key) && options[Number(e.key) - 1]) return void pickC(options[Number(e.key) - 1]);
       if (!inField) {
         if (e.key === '+' || e.key === '=') return void mapRef.current?.zoomBy(1.6);
         if (e.key === '-' || e.key === '_') return void mapRef.current?.zoomBy(1 / 1.6);
@@ -528,7 +541,7 @@ export function App() {
   const markers = useMemo(() => pool.filter((id) => GEO_META[id]?.tiny), [pool]);
   const highlights: Highlight[] = [];
   if (pick) highlights.push({ id: pick, kind: 'hint' });
-  if (goal && rules.prompt === 'map' && state.phase === 'playing') highlights.push({ id: goal, kind: 'target' });
+  if (goal && lit && state.phase === 'playing') highlights.push({ id: goal, kind: 'target' });
   if (mapFlash) highlights.push(mapFlash);
   if (hovered && state.phase === 'review') highlights.push({ id: hovered, kind: 'hover' });
   const areaPulse = rules.answer === 'click' && (state.hint?.level ?? 0) >= 3 && state.phase === 'playing' ? state.hint!.id : null;
@@ -579,8 +592,18 @@ export function App() {
     if ((route.name === 'me' || route.name === 'signin') && !user) return <SignInCard onSignIn={beginSignIn} onClose={home} />;
     return null;
   }
-  // Flags games stack more in the dock: the flag card above the input, or the four choices.
-  const dockExtra = !playing ? 0 : rules.answer === 'flag' ? (small ? 190 : 130) : rules.prompt === 'flag' && rules.answer !== 'click' ? (small ? 160 : 200) : 0;
+  // Flags and Capitals games stack more in the dock: the flag card above the input, the four choices, or the "Capital of" line.
+  const dockExtra = !playing
+    ? 0
+    : rules.answer === 'flag'
+      ? (small ? 190 : 130)
+      : rules.answer === 'capitalPick'
+        ? (small ? CAPITAL_CHOICES_EXTRA.small : CAPITAL_CHOICES_EXTRA.wide)
+        : rules.prompt === 'flag' && rules.answer !== 'click'
+          ? (small ? 160 : 200)
+          : rules.prompt === 'country'
+            ? COUNTRY_PROMPT_EXTRA
+            : 0;
   const safe = safeArea(state.phase, small, size.width, size.height, keyboard, dockExtra);
 
   const clock = limitMs === null ? formatClock(spent) : formatCountdown(limitMs - spent);
@@ -593,9 +616,7 @@ export function App() {
   const locateGoal = rules.answer === 'click' ? goal : null;
   const placeholder =
     rules.answer === 'capital'
-      ? rules.ordered
-        ? 'Name its capital…'
-        : 'Type a capital…'
+      ? 'Type its capital…'
       : rules.prompt === 'flag'
         ? 'Type the country…'
         : rules.prompt === 'map'
@@ -710,20 +731,31 @@ export function App() {
                 triesLeft={state.triesLeft}
                 onSkip={skip}
               />
-            ) : rules.answer === 'flag' ? (
+            ) : picking ? (
               goal && (
-                <FlagChoices
+                <Choices
+                  kind={rules.answer === 'flag' ? 'flag' : 'capital'}
                   targetId={goal}
+                  head={
+                    rules.answer === 'flag' ? (
+                      'Pick its flag'
+                    ) : (
+                      <>
+                        Capital of <b>{nameOf(goal)}</b>
+                      </>
+                    )
+                  }
                   ids={choices}
-                  disabled={disabledFlags}
+                  disabled={disabledChoices}
                   wrong={wrongPicks}
                   triesLeft={state.triesLeft}
-                  onPick={pickFlag}
+                  onPick={pickChoice}
                 />
               )
             ) : (
               <>
                 {rules.prompt === 'flag' && goal && <FlagCard key={goal} id={goal} />}
+                {rules.prompt === 'country' && goal && <CountryPrompt key={goal} targetId={goal} name={nameOf(goal)} />}
                 <GuessInput
                   ref={inputRef}
                   value={guess.value}
