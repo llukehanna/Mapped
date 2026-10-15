@@ -1,4 +1,6 @@
-import type { GameConfig, Mode } from './types.ts';
+import { COUNTRIES } from '../data/countries.ts';
+import { poolFor } from './scope.ts';
+import type { GameConfig, Mode, Scope } from './types.ts';
 
 export type Topic = 'countries' | 'flags' | 'capitals';
 export const TOPICS: Topic[] = ['countries', 'flags', 'capitals'];
@@ -43,8 +45,19 @@ export const rulesFor = (config: Pick<GameConfig, 'mode' | 'topic'>): Rules => R
 
 /** Rungs on the hint ladder: clicking answers get the 3 Locate rungs, picking a flag or capital 2 (each removes a wrong choice), naming 4 letter
  * rungs; Flags · Type adds a region rung in front of the letters. */
-export function hintLevels(config: Pick<GameConfig, 'mode' | 'topic'>): number {
-  if (topicOf(config) === 'flags' && config.mode === 'type') return 5;
+/**
+ * Flags · Type opens its ladder with the flag's region, unless every country in the game shares one region (S. America,
+ * or a single subregion picked), where it would say nothing. Without a scope, assume several regions.
+ */
+export function hasRegionRung(config: Pick<GameConfig, 'mode' | 'topic'> & { scope?: Scope }): boolean {
+  if (topicOf(config) !== 'flags' || config.mode !== 'type') return false;
+  if (!config.scope) return true;
+  const ids = new Set(poolFor(config.scope, COUNTRIES));
+  return new Set(COUNTRIES.filter((c) => ids.has(c.id)).map((c) => c.subregion)).size > 1;
+}
+
+export function hintLevels(config: Pick<GameConfig, 'mode' | 'topic'> & { scope?: Scope }): number {
+  if (hasRegionRung(config)) return 5;
   const { answer } = rulesFor(config);
   return answer === 'click' ? 3 : isPick(answer) ? 2 : 4;
 }

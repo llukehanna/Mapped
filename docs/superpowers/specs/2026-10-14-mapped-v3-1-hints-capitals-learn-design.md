@@ -101,3 +101,7 @@ Capitals · Type and Capitals · Identify runs played under the old rules are no
 ## Out of scope
 
 Learn for Countries or Capitals (easy to add later on the same reducer), syncing Learn progress to accounts, spaced repetition across days.
+
+## Revisions after launch
+
+- Flags · Type skips the region rung when every country in the game shares one subregion (S. America, or a single subregion picked): 4 letter rungs instead of 5. `hasRegionRung(config)` in `src/game/topics.ts` decides it from the game's scope, so the reducer, server replay and hint card agree.

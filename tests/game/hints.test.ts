@@ -57,6 +57,17 @@ describe('clues by topic', () => {
     expect(clueFor({ mode: 'identify', topic: 'capitals' }, 1, input('KEN'))).toBe('One wrong capital removed');
     expect(clueFor({ mode: 'identify', topic: 'capitals' }, 2, input('KEN'))).toBe('Two wrong capitals removed');
   });
+  it('flags · type: no region rung when every country in the game shares one region', () => {
+    const southAmerica = { mode: 'type' as const, topic: 'flags' as const, scope: { continents: ['south-america' as const], subregions: [] } };
+    const caribbean = { mode: 'type' as const, topic: 'flags' as const, scope: { continents: [], subregions: ['Caribbean'] } };
+    const africa = { mode: 'type' as const, topic: 'flags' as const, scope: { continents: ['africa' as const], subregions: [] } };
+    expect(hintLevels(southAmerica)).toBe(4);
+    expect(hintLevels(caribbean)).toBe(4);
+    expect(hintLevels(africa)).toBe(5);
+    for (const lvl of [1, 2, 3, 4]) expect(clueFor(southAmerica, lvl, input('CHL'))).toBe(clueText('identify', lvl, input('CHL')));
+    expect(clueFor(africa, 1, input('TCD'))).toBe('In Central Africa');
+  });
+
   it('flags · type: region first, then the letter rungs', () => {
     const flagsType = { mode: 'type' as const, topic: 'flags' as const };
     expect(clueFor(flagsType, 1, input('TCD'))).toBe('In Central Africa');
