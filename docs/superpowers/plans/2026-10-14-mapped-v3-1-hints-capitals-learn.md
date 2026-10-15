@@ -198,7 +198,6 @@ test('capitals · identify: pick the capital with the number keys', async ({ pag
 });
 ```
 
-  The second test's body is a sketch: give each choice button `data-country-id` so the test finds the target's button and a wrong one, presses the wrong key (tries drop to 2), then the right key (score 1 / 12).
   The choices panel root has class `choices` (flags keep working too: give the shared component both `choices` and `flag-choices` classes for Flags, or update the existing flag tests' selectors) and `data-target-id`; each button carries `data-country-id`.
 - [ ] **Step 5:** `npx tsc -b`, `npx vitest run`, `npx playwright test` (desktop + phone) pass. Screenshots for your own check (Capitals · Type and Identify, desktop and 375px phone) in `.superpowers/sdd/<plan>/shots/`; don't commit screenshot code. Commit "Capitals UI: named country, capital choices".
 
