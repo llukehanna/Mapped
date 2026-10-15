@@ -42,6 +42,22 @@ test('flags · type: a flag at a time; typing its country moves on', async ({ pa
   expect(errors).toEqual([]);
 });
 
+test('flags · type: the first hint names the region, then the letters', async ({ page }) => {
+  const errors = watchErrors(page);
+  await openSetup(page);
+  await chooseTopic(page, 'Flags');
+  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await start(page);
+  const card = page.getByRole('region', { name: 'Hints' });
+  await page.keyboard.press('?');
+  await expect(card).toContainText('1/5');
+  await expect(card.locator('li').first()).toHaveText('In South America');
+  await page.keyboard.press('?');
+  await expect(card).toContainText('2/5');
+  await expect(card.locator('li').nth(1)).toHaveText(/^Starts with \w$/);
+  expect(errors).toEqual([]);
+});
+
 test('flags · identify: pick with the number keys; a wrong pick costs a try', async ({ page }) => {
   const errors = watchErrors(page);
   await openSetup(page);

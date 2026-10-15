@@ -2,7 +2,7 @@ import type { Facts } from '../data/facts.ts';
 import type { GeoMeta } from '../data/geoMeta.ts';
 import type { CountryDef } from '../data/types.ts';
 import { capitalOf } from '../data/capitals.ts';
-import { rulesFor } from './topics.ts';
+import { rulesFor, topicOf } from './topics.ts';
 import type { GameConfig, Mode } from './types.ts';
 
 export interface ClueInput {
@@ -65,6 +65,9 @@ export function clueFor(config: Pick<GameConfig, 'mode' | 'topic'>, level: numbe
   const { answer } = rulesFor(config);
   if (answer === 'click') return clueText('locate', level, input);
   if (answer === 'flag') return level === 1 ? 'One wrong flag removed' : 'Two wrong flags removed';
+  if (topicOf(config) === 'flags' && config.mode === 'type') {
+    return level === 1 ? `In ${input.country.subregion}` : clueText('identify', level - 1, input);
+  }
   const name = answer === 'capital' ? capitalOf(input.country.id) : input.country.name;
   return clueText('identify', level, { ...input, country: { ...input.country, name } });
 }

@@ -53,8 +53,12 @@ describe('clues by topic', () => {
     expect(clueFor({ mode: 'type', topic: 'capitals' }, 1, input('KEN'))).toBe('Starts with N');
     expect(clueFor({ mode: 'identify', topic: 'capitals' }, 2, input('KEN'))).toBe('N _ _ _ _ _ _ · 7 letters');
   });
-  it('flags · type spells the country; locate rungs for clicking', () => {
-    expect(clueFor({ mode: 'type', topic: 'flags' }, 1, input('KEN'))).toBe('Starts with K');
+  it('flags · type: region first, then the letter rungs', () => {
+    const flagsType = { mode: 'type' as const, topic: 'flags' as const };
+    expect(clueFor(flagsType, 1, input('TCD'))).toBe('In Central Africa');
+    for (const lvl of [2, 3, 4, 5]) expect(clueFor(flagsType, lvl, input('TCD'))).toBe(clueText('identify', lvl - 1, input('TCD')));
+  });
+  it('capitals · locate uses the locate rungs', () => {
     expect(clueFor({ mode: 'locate', topic: 'capitals' }, 3, input('KEN'))).toBe('Look inside the circle');
   });
   it('flags · identify rungs say how many flags are left', () => {

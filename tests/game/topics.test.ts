@@ -20,7 +20,7 @@ describe('topic rules', () => {
   it('a missing topic is countries', () => expect(topicOf({})).toBe('countries'));
   it('hint ladders', () => {
     expect([hintLevels({ mode: 'type' }), hintLevels({ mode: 'locate' }), hintLevels({ mode: 'identify' })]).toEqual([4, 3, 4]);
-    expect(hintLevels({ mode: 'type', topic: 'flags' })).toBe(4);
+    expect(hintLevels({ mode: 'type', topic: 'flags' })).toBe(5);
     expect(hintLevels({ mode: 'locate', topic: 'capitals' })).toBe(3);
     expect(hintLevels({ mode: 'identify', topic: 'flags' })).toBe(2);
     expect(hintLevels({ mode: 'type', topic: 'capitals' })).toBe(4);
