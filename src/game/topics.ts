@@ -38,8 +38,10 @@ const RULES: Record<Topic, Record<Mode, Rules>> = {
 
 export const rulesFor = (config: Pick<GameConfig, 'mode' | 'topic'>): Rules => RULES[topicOf(config)][config.mode];
 
-/** Rungs on the hint ladder: clicking answers get the 3 Locate rungs, picking a flag 2 (each removes a wrong flag), naming 4 letter rungs. */
+/** Rungs on the hint ladder: clicking answers get the 3 Locate rungs, picking a flag 2 (each removes a wrong flag), naming 4 letter
+ * rungs; Flags · Type adds a region rung in front of the letters. */
 export function hintLevels(config: Pick<GameConfig, 'mode' | 'topic'>): number {
+  if (topicOf(config) === 'flags' && config.mode === 'type') return 5;
   const { answer } = rulesFor(config);
   return answer === 'click' ? 3 : answer === 'flag' ? 2 : 4;
 }
