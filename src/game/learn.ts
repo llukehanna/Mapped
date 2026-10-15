@@ -84,3 +84,9 @@ export function hardest(state: LearnState, n = 3): string[] {
     .slice(0, n)
     .map(([id]) => id);
 }
+
+/** A new round: the region's flags not learned yet, or all of them again once every one is (a review round). */
+export function roundFor(pool: readonly string[], learned: ReadonlySet<string>): string[] {
+  const left = pool.filter((id) => !learned.has(id));
+  return left.length > 0 ? left : [...pool];
+}

@@ -69,3 +69,32 @@ test('phone: capitals · identify fits a 375px screen', async ({ page }) => {
   await choices.nth(0).click();
   expect(errors).toEqual([]);
 });
+
+test('phone: flags · learn fits a 375px screen', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openSetup(page);
+  await chooseTopic(page, 'Flags');
+  await page.getByRole('radio', { name: 'Learn' }).click();
+  await page.getByRole('button', { name: /^Start learning/ }).click();
+  const choices = page.locator('.learn-choice');
+  await expect(choices).toHaveCount(4);
+  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(overflow).toBe(false);
+  for (const box of await Promise.all((await choices.all()).map((c) => c.boundingBox()))) {
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(375);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  // A wrong answer brings Continue, still on screen.
+  const target = await page.locator('.learn-card').getAttribute('data-target-id');
+  const ids = await choices.evaluateAll((els) => els.map((b) => (b as HTMLElement).dataset.countryId));
+  await choices.nth(ids.findIndex((id) => id !== target)).click();
+  const cont = page.getByRole('button', { name: /^Continue/ });
+  await expect(cont).toBeVisible();
+  const box = (await cont.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(375);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  expect(errors).toEqual([]);
+});

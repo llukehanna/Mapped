@@ -30,6 +30,7 @@ import { buildIndex } from './match/nameIndex.ts';
 import { localBests, readBest, recordResult } from './store/bests.ts';
 import { emailKey, hasImported, markImported } from './store/imported.ts';
 import { readJson, safeStorage, writeJson } from './store/storage.ts';
+import { readLearned, resetLearned } from './store/learned.ts';
 import { readTheme, writeTheme, type Theme } from './store/theme.ts';
 import { GuessInput } from './ui/GuessInput.tsx';
 import { useKeyboardInset, useMediaQuery, useNow, useSize, useTransient } from './ui/hooks.ts';
@@ -55,12 +56,17 @@ import { UserMenu } from './ui/UserMenu.tsx';
 import { YourGames } from './ui/YourGames.tsx';
 import { GiveUpButton, Score, ThemeToggle, TopBar, Wordmark } from './ui/TopBar.tsx';
 import { useGuess } from './ui/useGuess.ts';
+import { LearnCard } from './ui/LearnCard.tsx';
+import { LearnSummary } from './ui/LearnSummary.tsx';
+import { useLearn } from './ui/useLearn.ts';
 import { ZoomControls } from './ui/ZoomControls.tsx';
 
 /** How much taller than an input the dock stands with the capital choices (measured 102 px as 2×2 on phones, 62 as one row wide, plus room
  * for a capital that wraps to two lines), or with the "Capital of" line above the input (44 px and the dock's 10 px gap). */
 const CAPITAL_CHOICES_EXTRA = { small: 110, wide: 70 };
 const COUNTRY_PROMPT_EXTRA = 54;
+/** Flags · Learn: how much taller than an input the learn card stands (flag, answer line, the four names: measured 306 px on phones, 320 wide). */
+const LEARN_CARD_EXTRA = { small: 254, wide: 268 };
 const DEFAULT_CONFIG: GameConfig = { mode: 'type', scope: WORLD, timeLimitSec: null };
 const INDEX = buildIndex(COUNTRIES, TERRITORIES);
 /** Territory shape → the country whose color it shares (Greenland → Denmark). */
@@ -107,7 +113,15 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(() => readTheme(storage));
   const [draft, setDraft] = useState<GameConfig>(DEFAULT_CONFIG);
   const [state, dispatch] = useReducer(reduce, DEFAULT_CONFIG, initialState);
-  const now = useNow(state.phase === 'playing');
+  /** Flags · Learn, kept apart from the ranked game: no server, no board. The setup's Play | Learn choice lasts for this visit only. */
+  const learn = useLearn(storage, random);
+  const [learnPicked, setLearnPicked] = useState(false);
+  /** Bumped by Reset, so the setup re-reads the learned count. */
+  const [, setLearnedSeq] = useState(0);
+  const lesson = learn.session?.state ?? null;
+  const learning = lesson !== null && lesson.phase !== 'done';
+  const learnZoomed = useRef(false);
+  const now = useNow(state.phase === 'playing' || learning);
   const [toast, setToast] = useTransient<ToastMessage>(2400);
   const [announcement, setAnnouncement] = useState('');
   const [justFound, flashJust] = useTransient<string>(2000);
@@ -243,6 +257,22 @@ export function App() {
     }, 120);
     return () => window.clearTimeout(id);
   }, [goal, lit, state.phase]);
+
+  // Learn: once answered, the right country lights up; bring it into view if it's tiny or off-screen, and frame the region again
+  // for the next flag.
+  useEffect(() => {
+    if (!lesson) return;
+    const map = mapRef.current;
+    if (lesson.phase === 'answered' && lesson.last) {
+      if (!map?.isVisible(lesson.last.target, 14)) {
+        map?.focus(lesson.last.target, 6);
+        learnZoomed.current = true;
+      }
+    } else if (learnZoomed.current) {
+      learnZoomed.current = false;
+      if (lesson.phase === 'asking') map?.fit();
+    }
+  }, [lesson]);
 
   // Flags: fetch the next target's flag (Identify: its four) while this one is played.
   useEffect(() => {
@@ -414,6 +444,14 @@ export function App() {
     setConfirming(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
+  /** Flags · Learn: a round of the selected region's flags not learned yet. */
+  function startLearning(scope = draft.scope) {
+    setMenuOpen(false);
+    setTip(null);
+    learnZoomed.current = false;
+    learn.start(scope);
+  }
+  const startFromSetup = () => (learnPicked && topicOf(draft) === 'flags' ? startLearning() : void start());
   /** One target at a time: a hint about it. Any order: about the country picked on the map, or ask for a pick. */
   const hint = () => {
     const id = rules.ordered ? goal : pick;
@@ -478,15 +516,22 @@ export function App() {
 
   // Keyboard: Esc give up, ? hint, S skip, 1–4 pick a choice, + − 0 zoom, Enter start/replay, typing goes to the input.
   const overlay = renderOverlay();
-  const keys = useRef({ state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, choices, pickChoice, blocked: false });
+  const keys = useRef({ state, guess, start, startFromSetup, hint, askGiveUp, confirming, cancelGiveUp, choices, pickChoice, blocked: false, learnOn: false });
   useLayoutEffect(() => {
-    keys.current = { state, guess, start, hint, askGiveUp, confirming, cancelGiveUp, choices, pickChoice, blocked: overlay !== null };
+    keys.current = { state, guess, start, startFromSetup, hint, askGiveUp, confirming, cancelGiveUp, choices, pickChoice, blocked: overlay !== null, learnOn: learn.session !== null };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const { state: s, guess: g, start: go, hint: h, askGiveUp: ask, confirming: asking, cancelGiveUp: cancel, choices: options, pickChoice: pickC, blocked } =
+      const { state: s, guess: g, start: go, startFromSetup: begin, hint: h, askGiveUp: ask, confirming: asking, cancelGiveUp: cancel, choices: options, pickChoice: pickC, blocked, learnOn } =
         keys.current;
+      // Learn: its card and summary handle their own keys; only zoom is left here.
+      if (learnOn) {
+        if (e.key === '+' || e.key === '=') mapRef.current?.zoomBy(1.6);
+        if (e.key === '-' || e.key === '_') mapRef.current?.zoomBy(1 / 1.6);
+        if (e.key === '0') mapRef.current?.fit();
+        return;
+      }
       // A card is open over the map: it handles its own keys.
       if (blocked) return;
       const inField = e.target instanceof HTMLInputElement;
@@ -499,7 +544,7 @@ export function App() {
       // In setup, Enter always starts (Space still toggles a focused chip). In review it replays unless a button has focus.
       if (e.key === 'Enter' && s.phase === 'setup' && !inField && !inCorner) {
         e.preventDefault();
-        return void go();
+        return void begin();
       }
       if (e.key === 'Enter' && s.phase === 'review' && !onButton) return void go(s.config);
       if (s.phase !== 'playing') return;
@@ -544,6 +589,7 @@ export function App() {
   if (goal && lit && state.phase === 'playing') highlights.push({ id: goal, kind: 'target' });
   if (mapFlash) highlights.push(mapFlash);
   if (hovered && state.phase === 'review') highlights.push({ id: hovered, kind: 'hover' });
+  if (learning && lesson.phase === 'answered' && lesson.last) highlights.push({ id: lesson.last.target, kind: 'target', label: nameOf(lesson.last.target) });
   const areaPulse = rules.answer === 'click' && (state.hint?.level ?? 0) >= 3 && state.phase === 'playing' ? state.hint!.id : null;
   // Clues so far for the country being asked about (any order: the picked one; one at a time: the current target).
   const asked = rules.ordered ? goal : pick;
@@ -553,10 +599,13 @@ export function App() {
   const clues = hinted ? Array.from({ length: Math.min(hinted.level, levels) }, (_, i) => clue(state.config, i + 1, hinted.id)) : [];
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
   const draftBoard = boardFor(draft);
+  // Learned flags on this browser: the setup's "30 / 45 learned" and the summary.
+  const learnedIds = state.phase === 'setup' && !learning ? readLearned(storage) : new Set<string>();
+  const learnSummaryPool = lesson?.phase === 'done' && learn.session ? poolFor(learn.session.scope, COUNTRIES) : [];
 
   /** The card over the map, if any: from the URL (sign in, leaderboards, your games) or opened in place. */
   function renderOverlay(): ReactNode {
-    if ((state.phase !== 'setup' && state.phase !== 'review') || user === undefined) return null;
+    if ((state.phase !== 'setup' && state.phase !== 'review') || user === undefined || learn.session) return null;
     const home = () => go({ name: 'home' });
     if (card === 'name' && user) {
       return (
@@ -604,7 +653,10 @@ export function App() {
           : rules.prompt === 'country'
             ? COUNTRY_PROMPT_EXTRA
             : 0;
-  const safe = safeArea(state.phase, small, size.width, size.height, keyboard, dockExtra);
+  const learnExtra = small ? LEARN_CARD_EXTRA.small : LEARN_CARD_EXTRA.wide;
+  const safe = learn.session
+    ? safeArea('learn', small, size.width, size.height, keyboard, learnExtra)
+    : safeArea(state.phase, small, size.width, size.height, keyboard, dockExtra);
 
   const clock = limitMs === null ? formatClock(spent) : formatCountdown(limitMs - spent);
   const clockLevel = left <= 10_000 ? 'crit' : left <= 60_000 ? 'warn' : '';
@@ -624,7 +676,7 @@ export function App() {
           : 'Type a country…';
 
   return (
-    <div className={`app phase-${state.phase}`} style={{ '--kb': `${keyboard}px` } as CSSProperties}>
+    <div className={`app phase-${learn.session ? 'learn' : state.phase}`} style={{ '--kb': `${keyboard}px` } as CSSProperties}>
       <div className="map-wrap" ref={wrapRef}>
         {shapeList && size.width > 0 && (
           <WorldMap
@@ -653,7 +705,7 @@ export function App() {
       {shapes === null && <div className="loading mute">Loading the map…</div>}
       {shapes instanceof Error && <div className="loading">{shapes.message}. Reload to try again.</div>}
 
-      {state.phase === 'setup' && (
+      {state.phase === 'setup' && !learn.session && (
         <>
           <div className="corner">
             <Wordmark />
@@ -690,9 +742,61 @@ export function App() {
             best={readBest(storage, draft)}
             serverBest={user && draftBoard ? (bests.get(draftBoard) ?? null) : null}
             onChange={setDraft}
-            onStart={() => start()}
+            onStart={startFromSetup}
+            learn={learnPicked}
+            onLearn={setLearnPicked}
+            learned={pool.filter((id) => learnedIds.has(id)).length}
+            onResetLearned={() => {
+              resetLearned(storage, pool);
+              setLearnedSeq((n) => n + 1);
+            }}
           />
         </>
+      )}
+
+      {learning && learn.session?.card && (
+        <>
+          <TopBar
+            pill={`${scopeLabel(learn.session.scope)} · Flags · Learn`}
+            ranked={false}
+            found={lesson.learned.length}
+            total={lesson.pool.length}
+            scoreLabel="Learned"
+            clock={formatClock(Math.max(0, now - lesson.startedAt))}
+            clockLevel=""
+            theme={theme}
+            onTheme={toggleTheme}
+            onStop={learn.stop}
+          />
+          <div className="dock">
+            <LearnCard
+              key={learn.session.asked}
+              card={learn.session.card}
+              phase={lesson.phase}
+              last={lesson.last}
+              upNext={lesson.phase === 'answered' ? lesson.queue[0] : lesson.queue[1]}
+              onPick={learn.pick}
+              onContinue={learn.next}
+              onStop={learn.stop}
+            />
+          </div>
+          <ZoomControls onIn={() => mapRef.current?.zoomBy(1.6)} onOut={() => mapRef.current?.zoomBy(1 / 1.6)} onFit={() => mapRef.current?.fit()} />
+        </>
+      )}
+
+      {lesson?.phase === 'done' && learn.session && (
+        <LearnSummary
+          state={lesson}
+          region={scopeLabel(learn.session.scope)}
+          regionLearned={learnSummaryPool.filter((id) => learnedIds.has(id)).length}
+          regionTotal={learnSummaryPool.length}
+          onAgain={() => startLearning(learn.session!.scope)}
+          onPlay={() => {
+            learn.close();
+            setLearnPicked(false);
+          }}
+          onClose={learn.close}
+        />
       )}
 
       {playing && (

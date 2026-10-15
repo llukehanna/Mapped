@@ -31,6 +31,8 @@
 .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--chrome-line); border-radius: 9px; padding: 3px; gap: 2px; }
 .seg button { font-size: 12.5px; padding: 5px 10px; border-radius: 6px; border: 0; background: none; color: var(--mute); }
 .seg button.on { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+.play-learn { display: grid; grid-template-columns: 1fr 1fr; }
+.play-learn button { font-size: 13.5px; padding: 7px 10px; }
 .best { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--mute); }
 .best b { color: var(--ink); font-weight: 500; }
 .start { display: flex; align-items: center; justify-content: center; gap: 10px; height: 46px; border-radius: 11px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 15px; transition: transform 160ms var(--ease); }
@@ -53,6 +55,14 @@
 .tip { position: fixed; z-index: 30; padding: 6px 10px; border-radius: 8px; font-size: 12.5px; pointer-events: none; white-space: nowrap; background: var(--panel-bg); }
 .tip b { font-weight: 600; }
 
+/* Learn summary: the flags missed most, then Play Flags / Learn again. */
+.learn-hardest ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.learn-hardest li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.learn-hardest .flag { width: 32px; flex: none; border-radius: 3px; }
+.learn-hardest li .mute { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
+.learn-actions { display: flex; gap: 8px; }
+.learn-actions .btn { flex: 1; justify-content: center; height: 42px; }
+
 /* Phones: chrome shrinks, panels become bottom sheets. */
 @media (max-width: 767px) {
   .hide-sm { display: none !important; }
@@ -68,6 +78,9 @@
   .choice .flag { max-width: 120px; }
   .choice kbd { display: none; }
   .capital-choice { min-height: 48px; padding: 6px; }
+  .learn-flag { width: 160px; }
+  .learn-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .learn-choice { min-height: 48px; padding: 6px; }
   .corner { top: calc(12px + env(safe-area-inset-top)); left: 14px; right: 14px; }
   .setup { top: auto; bottom: 0; right: 0; left: 0; width: auto; transform: none; max-height: 62dvh; border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); animation: sheet-in 380ms var(--ease); }
   @keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } }
