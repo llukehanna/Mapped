@@ -2,8 +2,8 @@ import type { Facts } from '../data/facts.ts';
 import type { GeoMeta } from '../data/geoMeta.ts';
 import type { CountryDef } from '../data/types.ts';
 import { capitalOf } from '../data/capitals.ts';
-import { rulesFor, topicOf } from './topics.ts';
-import type { GameConfig, Mode } from './types.ts';
+import { hasRegionRung, rulesFor } from './topics.ts';
+import type { GameConfig, Mode, Scope } from './types.ts';
 
 export interface ClueInput {
   country: CountryDef;
@@ -61,12 +61,12 @@ export function clueText(mode: Mode, level: number, input: ClueInput): string {
 }
 
 /** The clue on rung `level` for any topic: letter rungs spell whatever the answer is (country or capital). */
-export function clueFor(config: Pick<GameConfig, 'mode' | 'topic'>, level: number, input: ClueInput): string {
+export function clueFor(config: Pick<GameConfig, 'mode' | 'topic'> & { scope?: Scope }, level: number, input: ClueInput): string {
   const { answer } = rulesFor(config);
   if (answer === 'click') return clueText('locate', level, input);
   if (answer === 'flag') return level === 1 ? 'One wrong flag removed' : 'Two wrong flags removed';
   if (answer === 'capitalPick') return level === 1 ? 'One wrong capital removed' : 'Two wrong capitals removed';
-  if (topicOf(config) === 'flags' && config.mode === 'type') {
+  if (hasRegionRung(config)) {
     return level === 1 ? `In ${PLACE[input.country.subregion] ?? input.country.subregion}` : clueText('identify', level - 1, input);
   }
   const name = answer === 'capital' ? capitalOf(input.country.id) : input.country.name;

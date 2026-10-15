@@ -14,7 +14,7 @@ Anyone can play. Sign in with Google to save your games and get on the leaderboa
 
 The bullets above describe Countries. The modes work on every topic. In Flags, Type shows a flag and you name its country, Locate asks you to click the flag's country, and Identify lights up a country and offers four flags. In Capitals, Type and Identify name the country (Type: type its capital; Identify: pick its capital from 4). Locate gives you a capital and you click its country.
 
-Hints are there if you're stuck, and they cost you on the leaderboard. Flags · Type has five: the region, then the first letter, then the letter pattern with its count, then the first and last letters, then every other letter.
+Hints are there if you're stuck, and they cost you on the leaderboard. Flags · Type has five: the region (skipped when the whole game is one region, like S. America), then the first letter, then the letter pattern with its count, then the first and last letters, then every other letter.
 
 Pick any mix of continents and subregions, and a time limit (or none, for a stopwatch).
 

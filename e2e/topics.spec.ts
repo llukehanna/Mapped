@@ -46,16 +46,27 @@ test('flags · type: the first hint names the region, then the letters', async (
   const errors = watchErrors(page);
   await openSetup(page);
   await chooseTopic(page, 'Flags');
-  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await page.getByRole('button', { name: /^Oceania/ }).click();
   await start(page);
   const card = page.getByRole('region', { name: 'Hints' });
   await page.keyboard.press('?');
   await expect(card).toContainText('1/5');
-  await expect(card.locator('li').first()).toHaveText('In South America');
+  await expect(card.locator('li').first()).toHaveText(/^In (Australasia|Melanesia|Micronesia|Polynesia)/);
   await page.keyboard.press('?');
   await expect(card).toContainText('2/5');
   await expect(card.locator('li').nth(1)).toHaveText(/^Starts with \w$/);
   expect(errors).toEqual([]);
+});
+
+test('flags · type: no region hint when the whole game is one region', async ({ page }) => {
+  await openSetup(page);
+  await chooseTopic(page, 'Flags');
+  await page.getByRole('button', { name: /^S\. America/ }).click();
+  await start(page);
+  const card = page.getByRole('region', { name: 'Hints' });
+  await page.keyboard.press('?');
+  await expect(card).toContainText('1/4');
+  await expect(card.locator('li').first()).toHaveText(/^Starts with \w$/);
 });
 
 test('flags · identify: pick with the number keys; a wrong pick costs a try', async ({ page }) => {
