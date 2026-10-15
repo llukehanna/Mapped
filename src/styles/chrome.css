@@ -97,7 +97,11 @@ kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--mute); bord
 .learn-choice.right { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: var(--accent-soft); color: var(--accent); }
 .learn-choice.wrong .choice-name { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 70%, transparent); }
 .learn-choice.right:disabled, .learn-choice.wrong:disabled { opacity: 1; }
-.score-label { font-family: var(--font-ui); font-size: 13px; color: var(--mute); }
+.learn-stats { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.learn-stats .stat-num { font-size: 20px; }
+.learn-stats .stat-num.wrong { color: var(--danger); }
+.learn-stats .stat-word { font-size: 13px; color: var(--mute); }
+.learn-stats .stat-sep { margin: 0 4px; color: var(--mute); }
 
 .toast { padding: 8px 14px; border-radius: 999px; font-size: 13.5px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; animation: toast-in 240ms var(--ease); }
 .toast.good { color: var(--accent); }

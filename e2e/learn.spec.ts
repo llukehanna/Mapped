@@ -40,7 +40,10 @@ test('flags · learn: practice is opt-in, drills with requeues, and never talks 
   await page.getByRole('button', { name: /^Start learning/ }).click();
 
   await expect(page.locator('.topbar .pill')).toHaveText('S. America · Flags · Learn');
-  await expect(page.locator('.topbar .score')).toHaveText('Learned 0 / 12');
+  const stats = page.locator('.topbar .learn-stats');
+  await expect(stats.locator('.score')).toHaveText('0 / 12');
+  await expect(stats).toHaveAttribute('aria-label', '0 of 12 learned, no answers yet, 0 wrong');
+  await expect(page.locator('.topbar .clock')).toHaveCount(0);
   await expect(card(page).locator('img.flag')).toBeVisible();
   await expect(page.locator('.learn-choice')).toHaveCount(4);
 
@@ -50,7 +53,8 @@ test('flags · learn: practice is opt-in, drills with requeues, and never talks 
   await expect(card(page)).toContainText(/That's .+ · .+/);
   await expect(page.locator('.learn-choice.right')).toHaveAttribute('data-country-id', first.target);
   await page.getByRole('button', { name: /^Continue/ }).click();
-  await expect(page.locator('.topbar .score')).toHaveText('Learned 0 / 12');
+  await expect(stats.locator('.score')).toHaveText('0 / 12');
+  await expect(stats).toHaveAttribute('aria-label', '0 of 12 learned, 0% right, 1 wrong');
 
   const streak: Record<string, number> = {};
   for (let i = 0; i < 3; i++) {
@@ -78,7 +82,7 @@ test('flags · learn: practice is opt-in, drills with requeues, and never talks 
       streak[q.target] = 1;
     }
   }
-  await expect(page.locator('.topbar .score')).toHaveText('Learned 1 / 12');
+  await expect(stats.locator('.score')).toHaveText('1 / 12');
 
   // Stop: no confirmation, straight to the summary.
   await page.getByRole('button', { name: 'Stop' }).click();

@@ -13,6 +13,8 @@ export interface LearnState {
   /** learned this round, in order */
   learned: string[];
   misses: Record<string, number>;
+  /** answers given this round, right or wrong */
+  answered: number;
   /** the last answer, while phase is 'answered' */
   last: { picked: string; target: string; right: boolean } | null;
   startedAt: number;
@@ -34,6 +36,7 @@ function begin(pool: string[], order: string[], now: number): LearnState {
     streak: {},
     learned: [],
     misses: {},
+    answered: 0,
     last: null,
     startedAt: now,
     endedAt: empty ? now : null,
@@ -45,10 +48,11 @@ function answer(state: LearnState, picked: string): LearnState {
   if (target === undefined) return state;
   const right = picked === target;
   const last = { picked, target, right };
+  const answered = state.answered + 1;
   if (!right) {
     const queue = [...rest];
     queue.splice(Math.min(REQUEUE_AFTER, queue.length), 0, target);
-    return { ...state, phase: 'answered', queue, streak: { ...state.streak, [target]: 0 }, misses: { ...state.misses, [target]: (state.misses[target] ?? 0) + 1 }, last };
+    return { ...state, phase: 'answered', queue, streak: { ...state.streak, [target]: 0 }, misses: { ...state.misses, [target]: (state.misses[target] ?? 0) + 1 }, answered, last };
   }
   const streak = (state.streak[target] ?? 0) + 1;
   const learned = streak >= LEARN_STREAK;
@@ -58,6 +62,7 @@ function answer(state: LearnState, picked: string): LearnState {
     queue: learned ? rest : [...rest, target],
     streak: { ...state.streak, [target]: streak },
     learned: learned ? [...state.learned, target] : state.learned,
+    answered,
     last,
   };
 }
@@ -75,6 +80,13 @@ export function learnReduce(state: LearnState | null, action: LearnAction): Lear
     case 'stop':
       return state.phase === 'done' ? state : { ...state, phase: 'done', endedAt: action.now };
   }
+}
+
+/** The round so far for the top bar: answers given, how many were wrong, and the share right (null before the first answer). */
+export function learnStats(state: LearnState): { answered: number; wrong: number; percentRight: number | null } {
+  const wrong = Object.values(state.misses).reduce((n, m) => n + m, 0);
+  const percentRight = state.answered === 0 ? null : Math.round(((state.answered - wrong) / state.answered) * 100);
+  return { answered: state.answered, wrong, percentRight };
 }
 
 /** Flags missed most this round, most-missed first; ties keep first-miss order. */

@@ -15,6 +15,7 @@ import { capitalChoices } from './game/capitalChoices.ts';
 import { removedChoices } from './game/choices.ts';
 import { flagChoices } from './game/flagChoices.ts';
 import { clueFor } from './game/hints.ts';
+import { learnStats } from './game/learn.ts';
 import type { LogEntry } from './game/log.ts';
 import { boardFor, boardKey, parseBoard, type Board } from './game/ranking.ts';
 import { groupOf, progressRows } from './game/progress.ts';
@@ -121,7 +122,7 @@ export function App() {
   const lesson = learn.session?.state ?? null;
   const learning = lesson !== null && lesson.phase !== 'done';
   const learnZoomed = useRef(false);
-  const now = useNow(state.phase === 'playing' || learning);
+  const now = useNow(state.phase === 'playing');
   const [toast, setToast] = useTransient<ToastMessage>(2400);
   const [announcement, setAnnouncement] = useState('');
   const [justFound, flashJust] = useTransient<string>(2000);
@@ -759,11 +760,7 @@ export function App() {
           <TopBar
             pill={`${scopeLabel(learn.session.scope)} · Flags · Learn`}
             ranked={false}
-            found={lesson.learned.length}
-            total={lesson.pool.length}
-            scoreLabel="Learned"
-            clock={formatClock(Math.max(0, now - lesson.startedAt))}
-            clockLevel=""
+            learn={{ learned: lesson.learned.length, total: lesson.pool.length, ...learnStats(lesson) }}
             theme={theme}
             onTheme={toggleTheme}
             onStop={learn.stop}
