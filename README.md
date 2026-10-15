@@ -12,15 +12,15 @@ Anyone can play. Sign in with Google to save your games and get on the leaderboa
 - **Locate**: you're given a name; click the country. You get 3 tries.
 - **Identify**: a country lights up; type its name.
 
-The bullets above describe Countries. The modes work on every topic. In Flags, Type shows a flag and you name its country, Locate asks you to click the flag's country, and Identify lights up a country and offers four flags. In Capitals, every game names the country: Type asks you to type the named country's capital, Identify offers four capitals to pick from, and Locate gives you a capital and you click its country (the hard one).
+The bullets above describe Countries. The modes work on every topic. In Flags, Type shows a flag and you name its country, Locate asks you to click the flag's country, and Identify lights up a country and offers four flags. In Capitals, Type and Identify name the country (Type: type its capital; Identify: pick its capital from 4). Locate gives you a capital and you click its country.
 
-Hints are there if you're stuck, and they cost you on the leaderboard. Flags · Type has five: the region first, then the first letter, the letter count, the first and last letters, and every other letter.
+Hints are there if you're stuck, and they cost you on the leaderboard. Flags · Type has five: the region, then the first letter, then the letter pattern with its count, then the first and last letters, then every other letter.
 
 Pick any mix of continents and subregions, and a time limit (or none, for a stopwatch).
 
 ## Learn
 
-Flags has an opt-in **Play | Learn** switch at the top of the setup card. Learn is a drill for getting to know the flags, with no timer pressure and no leaderboard. You see a flag and pick its country from 4 names. Get one wrong and it comes back 3 cards later; get it right twice in a row and it's learned. The round ends when every flag in it is learned.
+Flags has an opt-in **Play | Learn** switch at the top of the setup card. Learn is a drill for getting to know the flags, with no timer pressure and no leaderboard. You see a flag and pick its country from 4 names. Get one wrong and it comes back 3 cards later; get it right twice in a row and it's learned. The round ends when every flag in it is learned or when you press Stop.
 
 Progress is kept on this browser only, with a Reset link on the setup card. Nothing is sent to the server. Play is always available alongside it.
 
