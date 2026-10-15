@@ -82,6 +82,15 @@ Capitals · Type and Capitals · Identify runs played under the old rules are no
 - `src/store/learned.ts`: read the learned set, add ids, reset a region's ids (wrapped in try/catch like the other stores).
 - UI: `LearnCard` (flag + 4 name buttons + feedback line + Continue), `LearnSummary`; App switches between the game and the learn session; the map's highlight/focus reuse the existing map props.
 
+## Revisions during implementation
+
+- Learn's 4 name choices are seeded per round plus the number of cards asked, so a returning flag's options move around (players learn flags, not button positions).
+- Esc stops a Learn round (same as the Stop button; no confirmation).
+- The Learn summary's "Hardest this round" rows also show the miss count.
+- A wrong Capitals · Identify pick says "No, that's Kampala (Uganda)" and briefly lights that country, as Flags · Identify does.
+- Flags and capitals share one choices component; dock heights for the new panels are measured constants.
+- Learn's card is fixed per question (choices don't reshuffle during feedback); right answers auto-continue after about 0.9 s, wrong ones wait for Continue or Enter.
+
 ## Testing
 
 - Hints: Flags · Type rung 1 is the subregion and rungs 2–5 equal the old 1–4; `hintLevels` table.
