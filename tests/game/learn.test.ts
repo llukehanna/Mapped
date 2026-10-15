@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hardest, LEARN_STREAK, learnReduce, REQUEUE_AFTER, roundFor } from '../../src/game/learn.ts';
+import { hardest, LEARN_STREAK, learnReduce, learnStats, REQUEUE_AFTER, roundFor } from '../../src/game/learn.ts';
 import type { LearnState } from '../../src/game/learn.ts';
 
 const POOL = ['A', 'B', 'C', 'D', 'E'];
@@ -98,6 +98,17 @@ describe('learn drill', () => {
 
   it('an empty round is done immediately', () => {
     expect(start([], 1000)).toMatchObject({ phase: 'done', endedAt: 1000 });
+  });
+});
+
+describe('learnStats', () => {
+  it('no answers yet: no percentage', () => {
+    expect(learnStats(start())).toEqual({ answered: 0, wrong: 0, percentRight: null });
+  });
+
+  it('counts every answer and every wrong one, and rounds the percentage', () => {
+    const s = next(right(next(wrong(next(right(start()))))));
+    expect(learnStats(s)).toEqual({ answered: 3, wrong: 1, percentRight: 67 });
   });
 });
 

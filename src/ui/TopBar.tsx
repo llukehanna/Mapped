@@ -10,11 +10,9 @@ export function Wordmark() {
   );
 }
 
-/** `label` goes before the count ("Learned 12 / 45"); without one it reads as found. */
-export function Score({ found, total, label }: { found: number; total: number; label?: string }) {
+export function Score({ found, total }: { found: number; total: number }) {
   return (
-    <div className="score mono" aria-label={label ? `${label} ${found} of ${total}` : `${found} of ${total} found`}>
-      {label && <span className="score-label">{label} </span>}
+    <div className="score mono" aria-label={`${found} of ${total} found`}>
       <b>{found}</b>
       <span className="mute"> / {total}</span>
     </div>
@@ -27,6 +25,26 @@ export function ThemeToggle({ theme, onToggle }: { theme: 'dark' | 'light'; onTo
     <button type="button" className="iconbtn" onClick={onToggle} aria-label={label} title={label}>
       <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
     </button>
+  );
+}
+
+/** Flags · Learn: "12 / 45 learned · 86% right · 3 wrong", numbers and words on one baseline. No clock: Learn is untimed. */
+export function LearnStats({ learned, total, percentRight, wrong }: { learned: number; total: number; percentRight: number | null; wrong: number }) {
+  const percent = percentRight === null ? '—' : `${percentRight}%`;
+  return (
+    <div className="learn-stats" aria-label={`${learned} of ${total} learned, ${percentRight === null ? 'no answers yet' : `${percentRight}% right`}, ${wrong} wrong`}>
+      <span className="score mono">
+        <b>{learned}</b>
+        <span className="mute"> / {total}</span>
+      </span>
+      <span className="stat-word optional">learned</span>
+      <span className="stat-sep" aria-hidden="true">·</span>
+      <span className="stat-num mono">{percent}</span>
+      <span className="stat-word optional">right</span>
+      <span className="stat-sep" aria-hidden="true">·</span>
+      <span className={`stat-num mono ${wrong > 0 ? 'wrong' : ''}`}>{wrong}</span>
+      <span className="stat-word">wrong</span>
+    </div>
   );
 }
 
@@ -43,7 +61,7 @@ export function GiveUpButton({ onGiveUp }: { onGiveUp: () => void }) {
 /** Ends a Learn round straight away (progress is already saved). */
 export function StopButton({ onStop }: { onStop: () => void }) {
   return (
-    <button type="button" className="tb-btn" onClick={onStop} title="Stop (Esc)">
+    <button type="button" className="tb-btn stop-btn" onClick={onStop} title="Stop (Esc)" aria-label="Stop">
       <Icon name="stop" />
       <span className="tb-label">Stop</span>
     </button>
@@ -54,18 +72,22 @@ type TopBarProps = {
   pill: string;
   /** this run can go on a leaderboard */
   ranked: boolean;
-  found: number;
-  total: number;
-  /** before the count, e.g. "Learned" */
-  scoreLabel?: string;
-  clock: string;
-  clockLevel: '' | 'warn' | 'crit';
   theme: 'dark' | 'light';
   onTheme: () => void;
 } & (
-  | { onHint: () => void; onGiveUp: () => void; onMenu: () => void; onStop?: undefined }
-  /** Flags · Learn: Stop and the theme, on phones too; no hint, no menu */
-  | { onStop: () => void; onHint?: undefined; onGiveUp?: undefined; onMenu?: undefined }
+  | {
+      found: number;
+      total: number;
+      clock: string;
+      clockLevel: '' | 'warn' | 'crit';
+      onHint: () => void;
+      onGiveUp: () => void;
+      onMenu: () => void;
+      learn?: undefined;
+      onStop?: undefined;
+    }
+  /** Flags · Learn: its stats instead of score and clock; Stop and the theme, on phones too; no hint, no menu */
+  | { learn: Parameters<typeof LearnStats>[0]; onStop: () => void; onHint?: undefined; onGiveUp?: undefined; onMenu?: undefined }
 );
 
 export function TopBar(p: TopBarProps) {
@@ -79,11 +101,17 @@ export function TopBar(p: TopBarProps) {
         </span>
       )}
       <div className="tb-spacer" />
-      <Score found={p.found} total={p.total} label={p.scoreLabel} />
-      <div className="tb-divider" />
-      <div className={`clock mono ${p.clockLevel}`} role="timer" aria-live="off">
-        {p.clock}
-      </div>
+      {p.learn ? (
+        <LearnStats {...p.learn} />
+      ) : (
+        <>
+          <Score found={p.found} total={p.total} />
+          <div className="tb-divider" />
+          <div className={`clock mono ${p.clockLevel}`} role="timer" aria-live="off">
+            {p.clock}
+          </div>
+        </>
+      )}
       <div className="tb-spacer" />
       {p.onStop ? (
         <div className="tb-actions">
