@@ -46,8 +46,22 @@ export function Leaderboard({ topic, mode, region, onPick, onClose }: Leaderboar
       (d) => live && setData(d),
       () => live && setData('error'),
     );
+    // A board left open, or a phone tab restored from memory, would otherwise keep showing what it first loaded.
+    // Coming back refreshes it in place; a failed refresh keeps the rows already shown.
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      api.board(topic, mode, region).then(
+        (d) => live && setData(d),
+        () => live && setData((old) => old ?? 'error'),
+      );
+    };
+    const onPageShow = (e: PageTransitionEvent) => e.persisted && refresh();
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('pageshow', onPageShow);
     return () => {
       live = false;
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('pageshow', onPageShow);
     };
   }, [topic, mode, region]);
   const pinned = data && data !== 'error' && data.you && !data.rows.some((r) => r.you) ? data.you : null;

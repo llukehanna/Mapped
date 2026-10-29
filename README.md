@@ -26,7 +26,7 @@ Progress is kept on this browser only, with a Reset link on the setup card. Noth
 
 ## Leaderboards
 
-There are 63 boards: 3 topics × 3 modes × 7 regions (the World and each continent). Capitals · Type and Identify runs from before the rules changed show up in Your games as "Unranked: older rules". Boards rank by most countries found, then fewest hints, then fastest time, so unfinished runs count too (a run that found nothing doesn't). Signing in adds this browser's earlier games to your account, plus any bests it saved before accounts existed (unranked). Your games shows your best run on each board even if you didn't finish it: most countries found, then fewest hints, then fastest.
+There are 63 boards: 3 topics × 3 modes × 7 regions (the World and each continent). Anyone can look at them, signed in or not; only signed-in players with a name are on them. An open board refreshes when you come back to the tab. Capitals · Type and Identify runs from before the rules changed show up in Your games as "Unranked: older rules". Boards rank by most countries found, then fewest hints, then fastest time, so unfinished runs count too (a run that found nothing doesn't). Signing in adds this browser's earlier games to your account, plus any bests it saved before accounts existed (unranked). Your games shows your best run on each board even if you didn't finish it: most countries found, then fewest hints, then fastest.
 
 The server keeps the score honest:
 
