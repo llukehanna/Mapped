@@ -57,6 +57,32 @@ test('a leaderboard link opens that board, and closing it goes home', async ({ p
   await expect(board).toBeHidden();
 });
 
+test("signed out, an open board shows other players' runs, and picks up new ones when the tab comes back", async ({ page, browser }) => {
+  await openSetup(page);
+  await page.getByRole('button', { name: 'Leaderboards' }).click();
+  const board = page.getByRole('dialog', { name: 'Leaderboards' });
+  await board.getByRole('button', { name: 'S. America' }).click();
+  await expect(board.getByText('Loading…')).toBeHidden();
+
+  // Someone else saves a run on that board while this tab sits in the background.
+  const other = await browser.newContext();
+  const theirs = await other.newPage();
+  const player = await asPlayer(theirs);
+  await openSetup(theirs);
+  await signInFromSetup(theirs);
+  await pickName(theirs, player.name);
+  await theirs.getByRole('button', { name: /^S\. America/ }).click();
+  await start(theirs);
+  await typeLikeAPerson(theirs, SOUTH_AMERICA);
+  await expect(theirs.locator('.savecard')).toContainText(/Saved · #\d+ on S\. America · Type/);
+  await other.close();
+
+  await expect(board).not.toContainText(player.name);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(board.locator('tr', { hasText: player.name })).toContainText('12/12');
+  await expect(board.locator('tr.you')).toHaveCount(0);
+});
+
 test('leaderboards and your games switch topics', async ({ page }) => {
   await asPlayer(page);
   await page.goto('/leaderboards/flags/type/europe');
