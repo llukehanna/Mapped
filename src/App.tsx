@@ -579,7 +579,12 @@ export function App() {
   const frame = useMemo(() => (isWorld(config.scope) ? ('world' as const) : new Set(pool)), [config.scope, pool]);
   const rotate = rotationFor(new Set(pool.map((id) => COUNTRY.get(id)!.continent)));
   const shapeList = Array.isArray(shapes) ? shapes : null;
-  const allIds = useMemo(() => shapeList?.map((s) => s.id) ?? [], [shapeList]);
+  // Every shape, plus countries drawn only as a marker (Tuvalu has no shape at this scale), so markers get a state too.
+  const allIds = useMemo(() => {
+    const ids = shapeList?.map((s) => s.id) ?? [];
+    const drawn = new Set(ids);
+    return [...ids, ...COUNTRIES.filter((c) => !drawn.has(c.id)).map((c) => c.id)];
+  }, [shapeList]);
   // Learn: flags learned on this browser fill in like found countries; one that was just learned glows as it fills.
   const learnedCount = lesson?.learned.length ?? 0;
   const learnFound = useMemo(() => {
