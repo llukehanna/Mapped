@@ -128,6 +128,16 @@ test('Greenland fills in with Denmark', async ({ page }) => {
   await expect(page.locator('path.shape[data-id="t-greenland"]')).toHaveClass(/\b(just|found)\b/);
 });
 
+test('Tuvalu, a marker with no shape, fills in when found', async ({ page }) => {
+  await openSetup(page);
+  await page.getByRole('button', { name: /^Oceania/ }).click();
+  await start(page);
+  const marker = page.locator('g:has(> circle.marker-hit[data-id="TUV"]) > circle.marker');
+  await expect(marker).toHaveClass(/\btodo\b/);
+  await page.getByLabel('Country name').pressSequentially('tuvalu');
+  await expect(marker).toHaveClass(/\b(just|found)\b/);
+});
+
 test('the theme toggle is always there, including mid-game and in review', async ({ page }) => {
   await openSetup(page);
   await start(page);
