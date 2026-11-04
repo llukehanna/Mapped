@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { COUNTRIES } from '../../src/data/countries.ts';
-import { poolFor, scopeFromKey, scopeKey, scopeLabel, subregionsOf, WORLD } from '../../src/game/scope.ts';
+import { poolFor, poolOf, scopeFromKey, scopeKey, scopeLabel, subregionsOf, WORLD } from '../../src/game/scope.ts';
 import type { Scope } from '../../src/game/types.ts';
 
 const PINNED_FIRST_5 = ['AFG', 'AGO', 'ALB', 'AND', 'ARE'];
@@ -55,5 +55,18 @@ describe('scopeFromKey', () => {
       expect(scopeKey(scopeFromKey(scopeKey(scope)))).toBe(scopeKey(scope));
     }
     expect(subregions.every((s) => !s.includes(','))).toBe(true);
+  });
+
+  it('a seas pool is every sea, sorted, whatever the scope', () => {
+    const pool = poolOf({ topic: 'seas', scope: WORLD });
+    expect(pool).toHaveLength(55);
+    expect(pool).toEqual([...pool].sort((a, b) => (a < b ? -1 : 1)));
+    expect(poolOf({ topic: 'seas', scope: { continents: ['europe'], subregions: [] } })).toEqual(pool);
+  });
+
+  it('any other topic pools its countries', () => {
+    const scope = { continents: ['europe' as const], subregions: [] };
+    expect(poolOf({ topic: 'flags', scope })).toEqual(poolFor(scope, COUNTRIES));
+    expect(poolOf({ scope })).toEqual(poolFor(scope, COUNTRIES));
   });
 });

@@ -1,4 +1,7 @@
 import type { CountryDef } from '../data/types.ts';
+import { BASINS, SEA } from '../data/seas.ts';
+import { COUNTRY } from '../data/lookup.ts';
+import type { Topic } from './topics.ts';
 import { CONTINENTS } from './scope.ts';
 
 export interface ProgressRow {
@@ -34,4 +37,21 @@ export function groupOf(id: string, pool: readonly string[], countries: Readonly
   const c = countries.get(id)!;
   const continents = new Set(pool.map((p) => countries.get(p)?.continent));
   return continents.size === 1 ? c.subregion : CONTINENTS.find((x) => x.id === c.continent)!.label;
+}
+
+const basinLabel = (id: string) => BASINS.find((b) => b.id === SEA.get(id)!.basin)!.label;
+
+/** Progress rows for a topic: one per basin present for Seas (in BASINS order), else per continent or subregion. */
+export function progressRowsFor(topic: Topic, pool: readonly string[], found: readonly string[]): ProgressRow[] {
+  if (topic !== 'seas') return progressRows(pool, found, COUNTRY);
+  const done = new Set(found);
+  return BASINS.map(({ label }) => {
+    const ids = pool.filter((id) => basinLabel(id) === label);
+    return { label, found: ids.filter((id) => done.has(id)).length, total: ids.length };
+  }).filter((row) => row.total > 0);
+}
+
+/** The row label an id is counted under, for any topic. */
+export function groupFor(topic: Topic, id: string, pool: readonly string[]): string {
+  return topic === 'seas' ? basinLabel(id) : groupOf(id, pool, COUNTRY);
 }

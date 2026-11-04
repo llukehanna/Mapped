@@ -1,5 +1,7 @@
+import { COUNTRIES } from '../data/countries.ts';
 import type { Continent, CountryDef } from '../data/types.ts';
-import type { Scope } from './types.ts';
+import { SEAS } from '../data/seas.ts';
+import type { GameConfig, Scope } from './types.ts';
 
 export const CONTINENTS: { id: Continent; label: string }[] = [
   { id: 'africa', label: 'Africa' },
@@ -27,6 +29,12 @@ export function poolFor(scope: Scope, countries: readonly CountryDef[]): string[
     .filter((c) => inScope(c, scope))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((c) => c.id);
+}
+
+/** The ids a game of this topic is played over: every sea for Seas (whatever the scope), else the in-scope countries. */
+export function poolOf(config: Pick<GameConfig, 'topic' | 'scope'>): string[] {
+  if (config.topic === 'seas') return SEAS.map((s) => s.id).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return poolFor(config.scope, COUNTRIES);
 }
 
 /** Subregions of a continent, in data order. */

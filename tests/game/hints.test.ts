@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FACTS } from '../../src/data/facts.ts';
 import { GEO_META } from '../../src/data/geoMeta.ts';
 import { COUNTRY, nameOf } from '../../src/data/lookup.ts';
-import { clueFor, clueText, letterCount, letterPattern } from '../../src/game/hints.ts';
+import { clueFor, clueText, letterCount, letterPattern, seaClue } from '../../src/game/hints.ts';
 import { hintLevels } from '../../src/game/topics.ts';
 
 const clue = (mode: 'type' | 'identify' | 'locate', level: number, id: string) =>
@@ -83,5 +83,28 @@ describe('clues by topic', () => {
   });
   it('countries unchanged', () => {
     for (const mode of ['type', 'locate', 'identify'] as const) for (const lvl of [1, 2, 3]) expect(clueFor({ mode }, lvl, input('KEN'))).toBe(clueText(mode, lvl, input('KEN')));
+  });
+});
+
+describe('seas hints', () => {
+  it('locate rungs', () => {
+    expect(seaClue('locate', 1, 'aegean')).toBe('In the Mediterranean');
+    expect(seaClue('locate', 1, 'pac')).toBe('One of the five oceans');
+    expect(seaClue('locate', 1, 'caspian')).toBe('Inland, between Europe and Asia');
+    expect(seaClue('locate', 2, 'tasman')).toBe('Off Australia and New Zealand');
+    expect(seaClue('locate', 2, 'sargasso')).toBe('No coastline; in the North Atlantic');
+    for (const id of ['sou', 'weddell', 'ross', 'amundsen', 'belling']) expect(seaClue('locate', 2, id)).toBe('Off Antarctica');
+    expect(seaClue('locate', 2, 'med')).toMatch(/^Off \w.*, .* and \d+ others$/);
+    expect(seaClue('locate', 3, 'tasman')).toBe('Look inside the circle');
+  });
+  it('more than four coasts say "3 and N others", sorted by name; four or fewer are listed', () => {
+    expect(seaClue('locate', 2, 'med')).toBe('Off Algeria, Cyprus, Egypt and 13 others');
+    expect(seaClue('locate', 2, 'caspian')).toBe('Off Azerbaijan, Iran, Kazakhstan and 2 others');
+    expect(seaClue('locate', 2, 'black')).toMatch(/^Off .*, .*, .* and \d+ others$/);
+  });
+  it('letter rungs spell the full name, Sea included', () => {
+    expect(seaClue('identify', 1, 'tasman')).toBe('Starts with T');
+    expect(seaClue('type', 2, 'tasman')).toBe('T _ _ _ _ _   _ _ _ · 6 + 3 letters');
+    expect(seaClue('type', 3, 'tasman')).toBe('T _ _ _ _ _   _ _ a');
   });
 });

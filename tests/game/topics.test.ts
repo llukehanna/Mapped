@@ -17,6 +17,13 @@ describe('topic rules', () => {
     expect(rulesFor({ mode: 'locate', topic: 'capitals' })).toEqual({ ordered: true, prompt: 'capital', answer: 'click' });
     expect(rulesFor({ mode: 'identify', topic: 'capitals' })).toEqual({ ordered: true, prompt: 'country', answer: 'capitalPick' });
   });
+  it('seas', () => {
+    expect(rulesFor({ mode: 'type', topic: 'seas' })).toEqual({ ordered: false, prompt: null, answer: 'country' });
+    expect(rulesFor({ mode: 'locate', topic: 'seas' })).toEqual({ ordered: true, prompt: 'name', answer: 'click' });
+    expect(rulesFor({ mode: 'identify', topic: 'seas' })).toEqual({ ordered: true, prompt: 'map', answer: 'country' });
+    expect((['type', 'locate', 'identify'] as const).map((mode) => hintLevels({ mode, topic: 'seas' }))).toEqual([4, 3, 4]);
+    expect(MODE_BLURB.seas.locate).toBe('Click the named sea');
+  });
   it('a missing topic is countries', () => expect(topicOf({})).toBe('countries'));
   it('hint ladders', () => {
     expect([hintLevels({ mode: 'type' }), hintLevels({ mode: 'locate' }), hintLevels({ mode: 'identify' })]).toEqual([4, 3, 4]);

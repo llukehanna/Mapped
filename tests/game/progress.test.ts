@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTRY } from '../../src/data/lookup.ts';
-import { groupOf, progressRows } from '../../src/game/progress.ts';
+import { groupFor, groupOf, progressRows, progressRowsFor } from '../../src/game/progress.ts';
+import { poolOf, WORLD } from '../../src/game/scope.ts';
 
 describe('progressRows', () => {
   it('groups by continent when the pool spans several, in continent order', () => {
@@ -21,5 +22,21 @@ describe('progressRows', () => {
   it('names the group a country counts under', () => {
     expect(groupOf('BRA', ['BRA', 'FRA'], COUNTRY)).toBe('S. America');
     expect(groupOf('FRA', ['FRA', 'ESP'], COUNTRY)).toBe('Western Europe');
+  });
+});
+
+describe('seas progress', () => {
+  it('rows are basins, in BASINS order', () => {
+    const rows = progressRowsFor('seas', poolOf({ topic: 'seas', scope: WORLD }), ['med', 'aegean']);
+    expect(rows.map((r) => r.label)).toEqual(['Atlantic', 'Mediterranean', 'Pacific', 'Indian', 'Arctic', 'Southern', 'Inland']);
+    expect(rows[1]).toEqual({ label: 'Mediterranean', found: 2, total: 7 });
+    expect(groupFor('seas', 'tasman', [])).toBe('Pacific');
+  });
+  it('only basins present in the pool get a row', () => {
+    expect(progressRowsFor('seas', ['caspian', 'black'], ['black']).map((r) => r.label)).toEqual(['Mediterranean', 'Inland']);
+  });
+  it('other topics defer to the country rows', () => {
+    expect(progressRowsFor('countries', ['FRA', 'DEU', 'EGY'], ['FRA'])).toEqual(progressRows(['FRA', 'DEU', 'EGY'], ['FRA'], COUNTRY));
+    expect(groupFor('flags', 'FRA', ['FRA', 'EGY'])).toBe(groupOf('FRA', ['FRA', 'EGY'], COUNTRY));
   });
 });

@@ -13,7 +13,7 @@ interface ReviewPanelProps {
   onPick: (id: string) => void;
 }
 
-const MISSED_LABEL: Record<Topic, string> = { countries: 'Missed countries', flags: 'Missed flags', capitals: 'Missed capitals' };
+const MISSED_LABEL: Record<Topic, string> = { countries: 'Missed countries', flags: 'Missed flags', capitals: 'Missed capitals', seas: 'Missed seas' };
 
 export function ReviewPanel({ topic, pool, missed, hovered, onHover, onPick }: ReviewPanelProps) {
   const groups = new Map<string, string[]>();
