@@ -122,3 +122,10 @@ Gulfs, bays and straits as answers (a later "Seas+" list could add them from the
 ## Docs
 
 README: topic list, modes paragraph, boards count (66), credits (Natural Earth marine areas, public domain).
+
+## Revisions during implementation
+
+- **Fold overrides** (`FOLD_OVERRIDES` in `scripts/build-seas.ts`): Disko Bay (69.0°N 52.1°W) and Uummannaq Fjord (71.0°N 52.9°W) on Greenland's west coast join the **Labrador Sea**. They touch only Baffin Bay and Davis Strait (non-game water), and "nearest answer" picked the Atlantic across the ice sheet. The Labrador Sea is down Davis Strait, and is also where "nearest" sends the Baffin Island bays and Foxe Basin.
+- **Anchor overrides** (`ANCHOR_OVERRIDES`): the Southern Ocean's anchor is 64°S 20°E. Its computed one (the point of the band farthest from any boundary) sat on the antimeridian by the Ross Sea, at the edge of a map centred on Greenwich.
+- Quantization stays at 1e5: `seas.topo.json` is 577 KB.
+- The sea and water shapes are stitched across ±180 (d3's `geoStitch`) after the planar operations, so no seam line runs down the antimeridian through the Pacific, Arctic, Southern Ocean, Bering, Chukchi and Ross Seas.
