@@ -1,7 +1,8 @@
-import { geoGraticule10, geoPath, type GeoProjection } from 'd3-geo';
+import { geoContains, geoGraticule10, geoPath, type GeoProjection } from 'd3-geo';
 import { select } from 'd3-selection';
 import 'd3-transition';
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
+import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import { GEO_META } from '../data/geoMeta.ts';
 import type { ShapeState } from '../ui/shapeStates.ts';
@@ -33,6 +34,8 @@ export interface MapHandle {
 interface WorldMapProps {
   ref?: Ref<MapHandle>;
   shapes: readonly MapShape[];
+  /** disputed areas inside a country's shape, striped on top of it */
+  disputed: readonly Feature<Polygon | MultiPolygon>[];
   width: number;
   height: number;
   rotate: number;
@@ -50,6 +53,8 @@ interface WorldMapProps {
   reducedMotion: boolean;
   onShapeClick?: (id: string, pointerType: string) => void;
   onShapeHover?: (id: string | null, x: number, y: number) => void;
+  /** the striped area under the pointer (a disputed area, or a territory outside every country), if any */
+  onAreaHover?: (id: string | null, x: number, y: number) => void;
 }
 
 const MARKER_R = 5;
@@ -83,7 +88,7 @@ function offsetFor(id: string, radius: number): [number, number] {
 }
 
 export function WorldMap(props: WorldMapProps) {
-  const { shapes, width, height, rotate, frame, safe, states, markers, highlights, areaPulse, mode, reducedMotion } = props;
+  const { shapes, disputed, width, height, rotate, frame, safe, states, markers, highlights, areaPulse, mode, reducedMotion } = props;
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
@@ -93,6 +98,7 @@ export function WorldMap(props: WorldMapProps) {
   const path = useMemo(() => geoPath(projection), [projection]);
   const paths = useMemo(() => new Map(shapes.map((s) => [s.id, path(s.geometry) ?? ''])), [shapes, path]);
   const byId = useMemo(() => new Map(shapes.map((s) => [s.id, s])), [shapes]);
+  const disputedPaths = useMemo(() => disputed.map((f) => ({ id: String(f.id), d: path(f) ?? '' })), [disputed, path]);
   /** px across of each country's main landmass at zoom 1 */
   const mainSize = useMemo(() => {
     const out = new Map<string, number>();
@@ -178,6 +184,14 @@ export function WorldMap(props: WorldMapProps) {
     },
   }));
 
+  /** Striped areas take no clicks (those go to the country underneath), so hover finds them by geography instead. */
+  function areaAt(x: number, y: number): string | null {
+    const p = projection.invert?.(t.invert([x, y]));
+    if (!p) return null;
+    const hit = disputed.find((f) => geoContains(f, p)) ?? shapes.find((s) => states[s.id] === 'territory' && geoContains(s.geometry, p));
+    return hit ? String(hit.id) : null;
+  }
+
   function idAt(e: MouseEvent): string | null {
     const id = (e.target as Element).closest('[data-id]')?.getAttribute('data-id');
     return id && !id.startsWith('t-') ? id : null;
@@ -210,11 +224,16 @@ export function WorldMap(props: WorldMapProps) {
         if (id) props.onShapeClick?.(id, (e.nativeEvent as globalThis.PointerEvent).pointerType || 'mouse');
       }}
       onPointerMove={(e) => {
-        if (!props.onShapeHover) return;
+        if (!props.onShapeHover && !props.onAreaHover) return;
         const box = svgRef.current!.getBoundingClientRect();
-        props.onShapeHover(idAt(e), e.clientX - box.left, e.clientY - box.top);
+        const [x, y] = [e.clientX - box.left, e.clientY - box.top];
+        props.onShapeHover?.(idAt(e), x, y);
+        props.onAreaHover?.(areaAt(x, y), x, y);
       }}
-      onPointerLeave={() => props.onShapeHover?.(null, 0, 0)}
+      onPointerLeave={() => {
+        props.onShapeHover?.(null, 0, 0);
+        props.onAreaHover?.(null, 0, 0);
+      }}
     >
       <defs>
         <pattern id="missed-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
@@ -227,12 +246,19 @@ export function WorldMap(props: WorldMapProps) {
           <rect className="territory-bg" width="4" height="4" />
           <line className="territory-line" x1="0" y1="0" x2="0" y2="4" />
         </pattern>
+        {/* The same stripes with no ground, over a disputed area that is counted as part of a country (Somaliland). */}
+        <pattern id="disputed-hatch" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform={`scale(${1 / t.k}) rotate(-45)`}>
+          <line className="territory-line" x1="0" y1="0" x2="0" y2="4" />
+        </pattern>
       </defs>
       {/* Ocean fills the whole viewport: the map runs edge to edge with no globe outline. */}
       <rect className="ocean" width={width} height={height} />
       <g ref={gRef}>
         <path className="grat" d={path(GRATICULE) ?? ''} />
         <ShapeLayer shapes={shapes} paths={paths} states={states} />
+        {disputedPaths.map((a) => (
+          <path key={a.id} className="disputed" data-area={a.id} d={a.d} />
+        ))}
         {highlights.map((h) =>
           paths.has(h.id) ? <path key={`${h.kind}-${h.id}-${h.seq ?? 0}`} className={`hl ${h.kind}`} d={paths.get(h.id)} /> : null,
         )}

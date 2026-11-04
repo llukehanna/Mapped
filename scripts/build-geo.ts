@@ -16,6 +16,8 @@ const OUT_META = new URL('../src/data/geo-meta.json', import.meta.url);
 // Features folded into a neighbor, and features dropped entirely.
 const MERGE_INTO: Record<string, string> = { Somaliland: 'Somalia', 'N. Cyprus': 'Cyprus', 'Siachen Glacier': 'India' };
 const DROP = new Set(['Antarctica']);
+// Disputed areas folded into a country above, also kept on their own so the map can stripe them and name them on hover.
+const DISPUTED: Record<string, string> = { Somaliland: 't-somaliland', 'N. Cyprus': 't-northern-cyprus', 'Siachen Glacier': 't-siachen-glacier' };
 // Countries with no polygon at 1:50m: marker position only.
 const FALLBACK_ANCHOR: Record<string, [number, number]> = { TUV: [179.2, -8.52] };
 // Land borders that exist only through an overseas part: not what a player means by "borders".
@@ -59,7 +61,19 @@ if (unclaimed.length) throw new Error(`Unclaimed features: ${unclaimed.join(', '
 // Largest first, so enclaves (Vatican City, San Marino, Lesotho) draw on top and win clicks.
 features.sort((a, b) => geoArea(b) - geoArea(a));
 
-const topo: any = topology({ countries: { type: 'FeatureCollection', features } as FeatureCollection }, QUANTIZE);
+const disputed: Feature<Polygon | MultiPolygon>[] = Object.entries(DISPUTED).map(([name, id]) => {
+  if (!TERRITORIES.some((t) => t.id === id)) throw new Error(`Disputed area ${id} has no territory note`);
+  const { geometry } = feature(atlas, byName.get(name)![0]) as unknown as Feature<Polygon | MultiPolygon>;
+  return { type: 'Feature', id, properties: {}, geometry };
+});
+
+const topo: any = topology(
+  {
+    countries: { type: 'FeatureCollection', features } as FeatureCollection,
+    disputed: { type: 'FeatureCollection', features: disputed } as FeatureCollection,
+  },
+  QUANTIZE,
+);
 writeFileSync(OUT_TOPO, JSON.stringify(topo));
 
 // Meta: anchor (centroid of the largest polygon) and tiny flag, from the shapes as stored.

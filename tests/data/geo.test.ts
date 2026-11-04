@@ -14,6 +14,12 @@ describe('generated map data', () => {
     expect(ids).not.toContain('TUV'); // no polygon at 1:50m; marker only
   });
 
+  it('keeps disputed areas on their own too, each with a territory note for its hover', () => {
+    const disputed: string[] = topo.objects.disputed.geometries.map((g: { id: string }) => g.id);
+    expect(disputed.sort()).toEqual(['t-northern-cyprus', 't-siachen-glacier', 't-somaliland']);
+    for (const id of disputed) expect(TERRITORIES.map((t) => t.id)).toContain(id);
+  });
+
   it('has an anchor for every country, including marker-only ones', () => {
     for (const c of COUNTRIES) {
       const m = GEO_META[c.id];

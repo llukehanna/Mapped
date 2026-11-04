@@ -60,6 +60,7 @@ const ROWS: Row[] = [
   ['Mayotte', 'Part of France', null, [], null],
   ['Somaliland', 'Self-declared state, recognized as part of Somalia', null, [], null],
   ['Northern Cyprus', 'Recognized only by Turkey; counted as part of Cyprus', null, [], null],
+  ['Siachen Glacier', 'Held by India, claimed by Pakistan; counted as part of India', null, [], null],
   ['Tibet', 'Part of China', null, [], null],
   ['Hawaii', 'A U.S. state', null, [], null],
   ['Alaska', 'A U.S. state', null, [], null],
