@@ -2,9 +2,9 @@ import { COUNTRIES } from '../data/countries.ts';
 import { poolFor } from './scope.ts';
 import type { GameConfig, Mode, Scope } from './types.ts';
 
-export type Topic = 'countries' | 'flags' | 'capitals';
-export const TOPICS: Topic[] = ['countries', 'flags', 'capitals'];
-export const TOPIC_LABEL: Record<Topic, string> = { countries: 'Countries', flags: 'Flags', capitals: 'Capitals' };
+export type Topic = 'countries' | 'flags' | 'capitals' | 'seas';
+export const TOPICS: Topic[] = ['countries', 'flags', 'capitals', 'seas'];
+export const TOPIC_LABEL: Record<Topic, string> = { countries: 'Countries', flags: 'Flags', capitals: 'Capitals', seas: 'Seas' };
 
 /** What the dock shows for the current target: a country's name, its flag, a capital, the lit-up map, or a named country (Capitals · Type and Identify). */
 export type Prompt = 'name' | 'flag' | 'capital' | 'map' | 'country';
@@ -36,6 +36,11 @@ const RULES: Record<Topic, Record<Mode, Rules>> = {
     locate: { ordered: true, prompt: 'capital', answer: 'click' },
     identify: { ordered: true, prompt: 'country', answer: 'capitalPick' },
   },
+  seas: {
+    type: { ordered: false, prompt: null, answer: 'country' },
+    locate: { ordered: true, prompt: 'name', answer: 'click' },
+    identify: { ordered: true, prompt: 'map', answer: 'country' },
+  },
 };
 
 /** Answers given by picking one of four choices: logged as a click on the picked country, and any country may be picked. */
@@ -66,4 +71,5 @@ export const MODE_BLURB: Record<Topic, Record<Mode, string>> = {
   countries: { type: 'Name them all, any order', locate: 'Click the named country', identify: 'Name the lit-up country' },
   flags: { type: "Type the flag's country", locate: "Click the flag's country", identify: "Pick the lit-up country's flag" },
   capitals: { type: "Type the named country's capital", locate: "Click the capital's country", identify: "Pick the named country's capital" },
+  seas: { type: 'Name them all, any order', locate: 'Click the named sea', identify: 'Name the lit-up sea' },
 };

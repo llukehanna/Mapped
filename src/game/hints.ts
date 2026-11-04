@@ -2,6 +2,9 @@ import type { Facts } from '../data/facts.ts';
 import type { GeoMeta } from '../data/geoMeta.ts';
 import type { CountryDef } from '../data/types.ts';
 import { capitalOf } from '../data/capitals.ts';
+import { nameOf } from '../data/lookup.ts';
+import { BASINS, OCEANS, SEA } from '../data/seas.ts';
+import { SEA_META } from '../data/seaMeta.ts';
 import { hasRegionRung, rulesFor } from './topics.ts';
 import type { GameConfig, Mode, Scope } from './types.ts';
 
@@ -24,6 +27,11 @@ function list(names: string[]): string {
   return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
+/** "A, B and C", or "A, B, C and N others" past four names. */
+function listOrMore(names: string[]): string {
+  return names.length > 4 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} others` : list(names);
+}
+
 function where({ country, facts, meta }: ClueInput): string {
   const place = PLACE[country.subregion] ?? country.subregion;
   if (facts.landlocked) return `Landlocked, in ${place}`;
@@ -33,8 +41,7 @@ function where({ country, facts, meta }: ClueInput): string {
 
 function nearby({ meta, nameOf }: ClueInput): string {
   if (meta.neighbors.length === 0) return `Nearest countries: ${list((meta.nearest ?? []).map(nameOf))}`;
-  const names = meta.neighbors.map(nameOf).sort((a, b) => a.localeCompare(b));
-  return names.length > 4 ? `Borders ${names.slice(0, 3).join(', ')} and ${names.length - 3} others` : `Borders ${list(names)}`;
+  return `Borders ${listOrMore(meta.neighbors.map(nameOf).sort((a, b) => a.localeCompare(b)))}`;
 }
 
 /** "B _ _ _ _ _": the first letter and a blank for every other letter. "ends" also shows the last letter; "half" shows every
@@ -51,13 +58,17 @@ export function letterCount(name: string): string {
   return `${words.join(' + ')} letters`;
 }
 
-/** The clue on rung `level` (1-based) of the ladder for `mode`. */
-export function clueText(mode: Mode, level: number, input: ClueInput): string {
-  if (mode === 'locate') return level === 1 ? where(input) : level === 2 ? nearby(input) : 'Look inside the circle';
-  const { name } = input.country;
+/** The naming ladder for `name`: first letter, then blanks and the letter count, then more letters. */
+function letterClue(level: number, name: string): string {
   if (level === 1) return `Starts with ${name[0]}`;
   if (level === 2) return `${letterPattern(name, 'first')} · ${letterCount(name)}`;
   return letterPattern(name, level === 3 ? 'ends' : 'half');
+}
+
+/** The clue on rung `level` (1-based) of the ladder for `mode`. */
+export function clueText(mode: Mode, level: number, input: ClueInput): string {
+  if (mode === 'locate') return level === 1 ? where(input) : level === 2 ? nearby(input) : 'Look inside the circle';
+  return letterClue(level, input.country.name);
 }
 
 /** The clue on rung `level` for any topic: letter rungs spell whatever the answer is (country or capital). */
@@ -71,4 +82,20 @@ export function clueFor(config: Pick<GameConfig, 'mode' | 'topic'> & { scope?: S
   }
   const name = answer === 'capital' ? capitalOf(input.country.id) : input.country.name;
   return clueText('identify', level, { ...input, country: { ...input.country, name } });
+}
+
+/** The clue on rung `level` for a sea: Locate says which water and which coasts, the letter rungs spell the whole name. */
+export function seaClue(mode: Mode, level: number, id: string): string {
+  const sea = SEA.get(id)!;
+  if (mode !== 'locate') return letterClue(level, sea.name);
+  if (level >= 3) return 'Look inside the circle';
+  if (level === 1) {
+    if (OCEANS.has(id)) return 'One of the five oceans';
+    if (sea.basin === 'inland') return 'Inland, between Europe and Asia';
+    return `In ${BASINS.find((b) => b.id === sea.basin)!.place}`;
+  }
+  if (id === 'sargasso') return 'No coastline; in the North Atlantic';
+  const coast = SEA_META[id].coast;
+  if (coast.length === 0) return 'Off Antarctica';
+  return `Off ${listOrMore(coast.map(nameOf).sort((a, b) => a.localeCompare(b)))}`;
 }
