@@ -221,6 +221,12 @@ export function WorldMap(props: WorldMapProps) {
           <rect className="hatch-bg" width="5" height="5" />
           <line className="hatch-line" x1="0" y1="0" x2="0" y2="5" />
         </pattern>
+        {/* Land that is in no one's game (Western Sahara): hatched, the usual map sign for a disputed area. Stripes keep
+            their screen size at any zoom. */}
+        <pattern id="territory-hatch" patternUnits="userSpaceOnUse" width="3" height="3" patternTransform={`scale(${1 / t.k}) rotate(-45)`}>
+          <rect className="territory-bg" width="3" height="3" />
+          <line className="territory-line" x1="0" y1="0" x2="0" y2="3" />
+        </pattern>
       </defs>
       {/* Ocean fills the whole viewport: the map runs edge to edge with no globe outline. */}
       <rect className="ocean" width={width} height={height} />
