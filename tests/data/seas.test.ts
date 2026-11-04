@@ -78,10 +78,11 @@ describe('generated sea data', () => {
     inSea = new Map(seas.map((f) => [f.id as string, container(f)]));
   });
 
-  it('has a shape for every answer and every non-game water, oceans first', () => {
+  it('has a shape for every answer and every non-game water not swallowed by one, oceans first', () => {
     expect(seas.map((f) => f.id).sort()).toEqual(SEAS.map((s) => s.id).sort());
     expect(seas.slice(0, 5).map((f) => f.id).sort()).toEqual(['arc', 'atl', 'ind', 'pac', 'sou']);
-    expect(waters.map((f) => f.id).sort()).toEqual(WATERS.map((w) => w.id).sort());
+    const swallowed = ['w-drake-passage', 'w-luzon-strait', 'w-scotia-sea'];
+    expect(waters.map((f) => f.id).sort()).toEqual(WATERS.map((w) => w.id).filter((id) => !swallowed.includes(id)).sort());
     expect(antarctica.map((f) => f.id)).toEqual(['antarctica']);
   });
 
@@ -89,11 +90,17 @@ describe('generated sea data', () => {
     ['east of Gibraltar', [-4.0, 36.1], 'med'], ['Ligurian', [8.5, 43.7], 'med'], ['Sea of Azov', [36.5, 46.0], 'black'],
     ['East Siberian', [160, 73], 'arc'], ['62°S 20°E', [20, -62], 'sou'], ['50°S 20°E', [20, -50], 'ind'],
     ['65°S 120°W', [-120, -65], 'sou'], ['Aegean', [25, 38.5], 'aegean'], ['Tasman', [160, -38], 'tasman'],
+    ['Natural Earth\'s Scotia Sea, south of 60°S', [-54.8, -61.15], 'sou'], ['Szczecin Lagoon', [14.25, 53.75], 'baltic'],
   ];
   it.each(SAMPLES)('%s is in the right answer', (_, point, id) => expect(answerAt(point)).toBe(id));
 
   it('every anchor lies inside its own sea', () => {
     for (const s of SEAS) expect(inSea.get(s.id)!(meta[s.id].anchor), s.id).toBe(true);
+  });
+
+  it('keeps anchors off the antimeridian, at the edge of a Greenwich-centred map, unless the sea straddles it', () => {
+    const straddling = ['bering', 'chukchi'];
+    for (const s of SEAS) if (!straddling.includes(s.id)) expect(180 - Math.abs(meta[s.id].anchor[0]), s.id).toBeGreaterThan(5);
   });
 
   it('coasts are known except open water and Antarctica', () => {
@@ -104,8 +111,34 @@ describe('generated sea data', () => {
 
   it('the Greenland Sea coast includes Greenland', () => expect(meta.greenl.coast).toContain('t-greenland'));
 
+  it('ships no slivers: every polygon is at least 1 km²', () => {
+    for (const f of [...seas, ...waters]) for (const p of polygonsOf(f)) expect(geoArea(p) * 6371 ** 2, String(f.id)).toBeGreaterThanOrEqual(1);
+  });
+
   it('every polygon is wound for d3', () => {
     for (const f of [...seas, ...waters, ...antarctica]) for (const p of polygonsOf(f)) expect(geoArea(p), String(f.id)).toBeLessThan(2 * Math.PI);
+  });
+
+  it('has no there-and-back spikes (a, b, a) in any ring: one across a clipped view\'s horizon fills the wrong side', () => {
+    for (const f of [...seas, ...waters]) {
+      for (const ring of polygonsOf(f).flatMap((p) => p.coordinates)) {
+        const n = ring.length - 1;
+        for (let i = 0; i < n; i++) {
+          const [a, c] = [ring[(i + n - 1) % n], ring[(i + 1) % n]];
+          expect(a[0] === c[0] && a[1] === c[1], `${f.id} at ${ring[i]}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('every ring is wound for d3 too: the exterior clockwise, holes counter-clockwise (or clipping breaks at the map edge)', () => {
+    const area = (ring: Polygon['coordinates'][number]) => geoArea({ type: 'Polygon', coordinates: [ring] });
+    for (const f of [...seas, ...waters]) {
+      for (const [exterior, ...holes] of polygonsOf(f).map((p) => p.coordinates)) {
+        expect(area(exterior), String(f.id)).toBeLessThan(2 * Math.PI);
+        for (const h of holes) expect(area(h), String(f.id)).toBeGreaterThan(2 * Math.PI);
+      }
+    }
   });
 
   it('open water is in exactly one shape', () => {
