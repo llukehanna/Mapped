@@ -5,13 +5,14 @@
 // Boolean operations (polygon-clipping) work in planar lon/lat, with everything cut at ±180. On the way out, every long
 // straight edge is densified to 1° steps, which keeps d3's great-circle edges on the planar line (the 60°S cut most of
 // all), and the cuts at ±180 are stitched back together so no seam shows down the antimeridian.
-// 1. Each answer is the union of its Natural Earth features. The Atlantic, Pacific and Indian Oceans stop at 60°S;
-//    everything south of it is the Southern Ocean, less the Weddell, Ross, Amundsen and Bellingshausen Seas.
-//    Oceans give way to the seas inside them, so no two answers overlap.
-// 2. Water no feature covers (world − land − every feature) is split into pieces; each piece over 1,000 km² joins the
-//    answer it shares the longest boundary with (or the nearest answer, when it touches only non-game water).
-//    Pieces touching no feature at all are lakes and are dropped.
-// 3. Non-game water (gulfs, bays, straits...) is each feature less the answers, so it fills only what they leave.
+// 1. Each answer is the union of its Natural Earth features. Oceans give way to the seas inside them, so no two
+//    answers overlap.
+// 2. Water no feature covers (world − land − every feature) is split into pieces. Each joins the answer it shares the
+//    longest boundary with. A piece touching only non-game water joins the nearest answer if it is 1,000 km² or more,
+//    else the non-game water it shares the longest boundary with. Pieces touching no feature at all are lakes, dropped.
+// 3. The Atlantic, Pacific and Indian Oceans stop at 60°S. Everything south of it that isn't land or the Weddell, Ross,
+//    Amundsen or Bellingshausen Sea is the Southern Ocean: a full band, with no non-game water in it.
+// 4. Non-game water (gulfs, bays, straits...) is each feature less the answers, so it fills only what they leave.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { geoArea, geoBounds, geoCentroid, geoContains, geoDistance, geoEquirectangular } from 'd3-geo';
@@ -21,7 +22,7 @@ import type { MultiPolygon as PcMulti, Pair, Polygon as PcPolygon, Ring } from '
 import { feature } from 'topojson-client';
 import { topology } from 'topojson-server';
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson';
-import { OCEANS, SEAS, SKIP_NE, WATERS } from '../src/data/seas.ts';
+import { OCEANS, SEA, SEAS, SKIP_NE, WATER, WATERS } from '../src/data/seas.ts';
 
 const SOURCE = new URL('./data/ne_50m_geography_marine_polys.geojson', import.meta.url);
 const WORLD = new URL('../src/data/world.topo.json', import.meta.url);
@@ -33,8 +34,17 @@ const QUANTIZE = 1e5;
 // Oceans that stop at 60°S, and the seas carved out of the Southern Ocean below it.
 const CUT_AT_60S = ['atl', 'pac', 'ind'];
 const ANTARCTIC_SEAS = ['weddell', 'ross', 'amundsen', 'belling'];
-const MIN_GAP_KM2 = 1_000;
+// Uncovered pieces touching only non-game water: from this size they join the nearest answer, below it that water.
+const NEAREST_KM2 = 1_000;
 const PRINT_GAP_KM2 = 5_000;
+// Polygons smaller than this are slivers left by the boolean operations (or between two coastlines): dropped.
+const SLIVER_KM2 = 1;
+// Non-game water that lies wholly inside an answer, so it has no shape of its own (still named in notes when typed).
+const SWALLOWED = new Set([
+  'w-drake-passage', // covered by the Atlantic and Pacific north of 60°S, the Southern Ocean south of it
+  'w-luzon-strait', // a zero-area feature at 1:50m
+  'w-scotia-sea', // south of 60°S: the Southern Ocean, and Elephant Island
+]);
 const EARTH_KM = 6371;
 // Uncovered pieces whose longest-boundary answer is wrong: the piece containing `at` joins `to` instead.
 const FOLD_OVERRIDES: { at: [number, number]; to: string }[] = [
@@ -47,7 +57,10 @@ const FOLD_OVERRIDES: { at: [number, number]; to: string }[] = [
 const ANCHOR_OVERRIDES: Record<string, [number, number]> = {
   // The band's widest point is on the antimeridian (by the Ross Sea), at the edge of a map centred on Greenwich.
   sou: [20, -64],
+  // The centroid of the polar cap is a hair from the pole, on the antimeridian side.
+  arc: [0, 87],
 };
+for (const id of Object.keys(ANCHOR_OVERRIDES)) if (!SEA.has(id)) throw new Error(`Anchor override for unknown sea ${id}`);
 // Coastal countries: a country or territory vertex within this many degrees of the sea's boundary.
 const COAST_DEG = 0.2;
 const NO_COAST = new Set(['sou', ...ANTARCTIC_SEAS]); // "Off Antarctica", which is not a country
@@ -70,7 +83,17 @@ const asPolygons = (g: Polygon | MultiPolygon): PcMulti => (g.type === 'Polygon'
 // features at 179.999897 instead of 180: snapped to ±180, or a thin seam of uncovered water runs down the antimeridian.
 const snapX = (x: number) => (180 - Math.abs(x) < 2e-4 ? Math.sign(x) * 180 : Math.round(x * 1e6) / 1e6);
 const snap = (mp: PcMulti): PcMulti => mp.map((poly) => poly.map((ring) => ring.map(([x, y]) => [snapX(x), Math.round(y * 1e6) / 1e6])));
-const union = (gs: PcMulti[]): PcMulti => (gs.length ? pc.union(gs[0], ...gs.slice(1)) : []);
+// polygon-clipping occasionally loses a segment (or recurses forever) on points its own earlier output computed;
+// rounding those to the 1e-6 grid and trying again gets past it.
+function robust(op: (first: PcMulti, ...rest: PcMulti[]) => PcMulti, gs: PcMulti[]): PcMulti {
+  try {
+    return op(gs[0], ...gs.slice(1));
+  } catch {
+    const snapped = gs.map(snap);
+    return op(snapped[0], ...snapped.slice(1));
+  }
+}
+const union = (gs: PcMulti[]): PcMulti => (gs.length ? robust(pc.union, gs) : []);
 
 // Fill in long edges at `step`° steps. Meridian edges and edges along a pole are left alone: they are already exact.
 function densify(ring: Ring, step = 1): Ring {
@@ -101,8 +124,8 @@ const westOf = (mps: PcMulti[]) => [...new Set(mps.flat(3).filter(([x]) => x ===
 // The output for d3: long edges densified, rings reversed (polygon-clipping winds exteriors counter-clockwise, d3 wants
 // them clockwise), and the cuts at ±180 and the poles stitched back together with geoStitch, so no seam line runs down
 // the antimeridian. geoStitch can hand back a joined hole as a polygon of its own (d3 reads it as the sphere minus the
-// hole) or a ring with no area; holes go back into the polygon around them, empty rings are dropped. If the stitched
-// shape's area still differs from the cut one, the cut one is kept.
+// hole) or a ring with no area; holes go back into the polygon around them, empty rings are dropped. The build fails
+// if the stitched shape's area differs from the cut one.
 function forD3(id: string, mp: PcMulti): Feature<MultiPolygon> {
   type Coords = Polygon['coordinates'];
   const areaOf = (c: Coords) => geoArea({ type: 'Polygon', coordinates: c });
@@ -118,14 +141,12 @@ function forD3(id: string, mp: PcMulti): Feature<MultiPolygon> {
     const around = stitched.find((c) => geoContains({ type: 'Polygon', coordinates: [c[0]] }, hole[0][0] as Pair));
     if (around) around.push(...hole);
   }
-  const ok = stitched.length > 0 && Math.abs(total(stitched) - total(cut)) < 1e-6;
-  if (!ok) console.log(`  ${id}: stitching failed, kept cut at ±180`);
-  const polys = ok ? stitched : cut;
-  for (const c of polys) {
+  if (!stitched.length || Math.abs(total(stitched) - total(cut)) >= 1e-6) throw new Error(`${id}: stitching across ±180 changed the area`);
+  for (const c of stitched) {
     if (areaOf(c) >= 2 * Math.PI) throw new Error(`${id}: a polygon is inverted`);
     if (areaOf([c[0]]) >= 2 * Math.PI || c.slice(1).some((h) => areaOf([h]) < 2 * Math.PI)) throw new Error(`${id}: rings out of order`);
   }
-  return { type: 'Feature', id, properties: {}, geometry: { type: 'MultiPolygon', coordinates: polys } };
+  return { type: 'Feature', id, properties: {}, geometry: { type: 'MultiPolygon', coordinates: stitched } };
 }
 
 // Area on the sphere (km²) of a planar lon/lat polygon, its edges straight in lon/lat: ∮ sin φ dλ, exact per edge.
@@ -212,6 +233,8 @@ for (const [name, gs] of neByName) neByName.set(name, gs.map((g) => matchSeam(g,
 const land = timed('land', () => union(landParts.map((g) => matchSeam(g, west))));
 const allNe = timed('all features', () => union([...neByName.entries()].filter(([n]) => !SKIP_NE.includes(n)).flatMap(([, gs]) => gs)));
 
+// The oceans' parts south of 60°S go to the Southern Ocean here only so the gap probes below see an answer there;
+// the band itself is rebuilt in step 3.
 const raw = new Map<string, PcMulti>();
 timed('answers', () => {
   for (const s of SEAS) if (s.id !== 'sou') raw.set(s.id, neUnion(s.ne));
@@ -227,19 +250,22 @@ timed('answers', () => {
 
 const gaps = timed('gaps', () => pc.difference(WORLD_BOX, land, allNe))
   .map((poly) => ({ poly, area: planarKm2(poly) }))
-  .filter((g) => g.area >= MIN_GAP_KM2)
+  .filter((g) => g.area >= SLIVER_KM2)
   .map((g) => ({ ...g, centroid: geoCentroid({ type: 'Polygon', coordinates: g.poly.map((r) => r.slice().reverse()) }) as Pair }));
 
 const answerAt = new Map([...raw].map(([id, mp]) => [id, new Locator(mp)]));
+const waterAt = new Map(WATERS.map((w) => [w.id, new Locator(neByName.get(w.ne)!.flat())]));
 const neAt = new Locator(allNe);
 // For "nearest answer": every boundary point, long edges filled in at 0.25° so a straight sea boundary counts along its length.
 const boundaryPoints = new Map([...raw].map(([id, mp]) => [id, mp.flatMap((poly) => poly.flatMap((ring) => densify(ring, 0.25)))]));
-const folds = new Map<string, PcMulti[]>(SEAS.map((s) => [s.id, []]));
+const folds = new Map<string, PcMulti[]>([...SEAS, ...WATERS].map((s) => [s.id, []]));
+const usedOverrides = new Set<(typeof FOLD_OVERRIDES)[number]>();
 const report: string[] = [];
-let lakes = 0;
+const count = { answer: 0, nearest: 0, water: 0, lake: 0 };
 timed('folding', () => {
   for (const gap of gaps) {
     const score = new Map<string, number>();
+    const waterScore = new Map<string, number>();
     let touchesFeature = false;
     for (const ring of gap.poly) for (let i = 1; i < ring.length; i++) {
       const [x0, y0] = ring[i - 1];
@@ -250,59 +276,162 @@ timed('folding', () => {
       const probe: Pair = [(x0 + x1) / 2 + ((y1 - y0) / len) * 0.01, (y0 + y1) / 2 - ((x1 - x0) / len) * 0.01];
       if (!neAt.has(probe)) continue;
       touchesFeature = true;
+      const add = (m: Map<string, number>, id: string) => m.set(id, (m.get(id) ?? 0) + geoDistance(ring[i - 1], ring[i]));
       const id = [...answerAt].find(([, at]) => at.has(probe))?.[0];
-      if (id) score.set(id, (score.get(id) ?? 0) + geoDistance(ring[i - 1], ring[i]));
+      if (id) add(score, id);
+      else {
+        const w = [...waterAt].find(([, at]) => at.has(probe))?.[0];
+        if (w) add(waterScore, w);
+      }
     }
     const override = FOLD_OVERRIDES.find((o) => new Locator([gap.poly]).has(o.at));
-    if (!touchesFeature && !override) {
-      lakes++;
+    if (override) usedOverrides.add(override);
+    const best = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1])[0]?.[0];
+    let to = override?.to ?? best(score);
+    let how = override ? ' (override)' : '';
+    if (to) count.answer++;
+    else if (!touchesFeature) {
+      count.lake++;
       continue;
-    }
-    let to = override?.to ?? [...score].sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (!to) {
-      let best = Infinity;
+    } else if (gap.area >= NEAREST_KM2) {
+      let d0 = Infinity;
       for (const [id, points] of boundaryPoints) for (const v of points) {
         const d = geoDistance(v, gap.centroid);
-        if (d < best) [best, to] = [d, id];
+        if (d < d0) [d0, to] = [d, id];
       }
+      how = ' (nearest)';
+      count.nearest++;
+    } else {
+      to = best(waterScore);
+      if (!to) throw new Error(`Gap at ${gap.centroid} touches a feature but neither an answer nor a water`);
+      count.water++;
     }
     folds.get(to!)!.push([gap.poly]);
     if (gap.area > PRINT_GAP_KM2) {
       const [lon, lat] = gap.centroid;
-      report.push(`${Math.round(gap.area).toLocaleString('en').padStart(10)} km²  ${lat.toFixed(1).padStart(6)}, ${lon.toFixed(1).padStart(6)}  → ${SEAS.find((s) => s.id === to)!.name}${override ? ' (override)' : score.size ? '' : ' (nearest)'}`);
+      report.push(`${Math.round(gap.area).toLocaleString('en').padStart(10)} km²  ${lat.toFixed(1).padStart(6)}, ${lon.toFixed(1).padStart(6)}  → ${(SEA.get(to!) ?? WATER.get(to!))!.name}${how}`);
     }
   }
 });
+const unused = FOLD_OVERRIDES.filter((o) => !usedOverrides.has(o));
+if (unused.length) throw new Error(`Fold overrides in no gap: ${unused.map((o) => o.at).join('; ')}`);
 console.log(`Gaps over ${PRINT_GAP_KM2.toLocaleString('en')} km² (area, centroid lat/lon, answer):`);
 for (const line of report) console.log(line);
-console.log(`${gaps.length} gaps over ${MIN_GAP_KM2.toLocaleString('en')} km², ${lakes} of them lakes (dropped)`);
+console.log(
+  `${gaps.length} gaps over ${SLIVER_KM2} km²: ${count.answer} joined the answer they border, ${count.nearest} the nearest answer, ` +
+    `${count.water} small ones their non-game water; ${count.lake} lakes dropped`,
+);
 
-const answers = new Map([...raw].map(([id, mp]) => [id, folds.get(id)!.length ? union([mp, ...folds.get(id)!]) : mp]));
+const folded = (id: string, mp: PcMulti) => (folds.get(id)!.length ? union([mp, ...folds.get(id)!]) : mp);
+const answers = new Map([...raw].map(([id, mp]) => [id, folded(id, mp)]));
 
-// ---- 3. Non-game water, Antarctica, output ----
+// ---- 3. The Southern Ocean: everything south of 60°S that is neither land nor another answer ----
 
-const allAnswers = timed('answer union', () => union([...answers.values()]));
-const waterShapes = timed('waters', () => WATERS.map((w) => ({ id: w.id, mp: pc.difference(union(neByName.get(w.ne)!), allAnswers) })));
+const southLand = pc.intersection(land, SOUTH_OF_60S); // Antarctica and the islands: far fewer rings than the world
+timed('southern ocean', () => {
+  for (const id of CUT_AT_60S) answers.set(id, pc.intersection(answers.get(id)!, NORTH_OF_60S));
+  const others = SEAS.filter((s) => s.id !== 'sou' && new Locator(answers.get(s.id)!).bounds[1] < -60).map((s) => answers.get(s.id)!);
+  answers.set('sou', robust(pc.difference, [pc.difference(SOUTH_OF_60S, southLand), ...others]));
+});
+
+// ---- 4. Non-game water, Antarctica, output ----
+
+// Slivers left by the boolean operations go, so no shape carries a polygon nobody could see or click.
+const solid = (mp: PcMulti) => mp.filter((poly) => planarKm2(poly) >= SLIVER_KM2);
+// Each water less the answers whose bounding boxes meet it (one union of every answer trips polygon-clipping), and
+// south of 60°S less land too, so none is left there at all.
+const overlaps = (a: number[], b: number[]) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+const answerBounds = [...answers.values()].map((mp) => ({ mp, bounds: new Locator(mp).bounds }));
+const waterShapes = timed('waters', () =>
+  WATERS.map((w) => {
+    const mp = folded(w.id, union(neByName.get(w.ne)!));
+    const bounds = new Locator(mp).bounds;
+    const clips = answerBounds.filter((a) => overlaps(a.bounds, bounds)).map((a) => a.mp);
+    if (bounds[1] < -60) clips.push(southLand);
+    return { id: w.id, mp: solid(robust(pc.difference, [mp, ...clips])) };
+  }),
+);
 
 const ordered = [...SEAS.filter((s) => OCEANS.has(s.id)), ...SEAS.filter((s) => !OCEANS.has(s.id))];
-const seaFeatures = ordered.map((s) => forD3(s.id, answers.get(s.id)!));
+const seaFeatures = ordered.map((s) => forD3(s.id, solid(answers.get(s.id)!)));
 const waterFeatures = waterShapes.filter((w) => w.mp.length).map((w) => forD3(w.id, w.mp));
-const empty = WATERS.filter((w) => !waterFeatures.some((f) => f.id === w.id));
-if (empty.length) throw new Error(`Non-game water covered entirely by answers: ${empty.map((w) => w.name).join(', ')}`);
+const shapeless = WATERS.filter((w) => !waterFeatures.some((f) => f.id === w.id)).map((w) => w.id);
+if (shapeless.join() !== [...SWALLOWED].join()) throw new Error(`Non-game water with no shape: ${shapeless.join(', ')}; expected ${[...SWALLOWED].join(', ')}`);
 const antarctica = feature(atlas, antarcticaGeom) as unknown as Feature<Polygon | MultiPolygon>;
 for (const coordinates of asPolygons(antarctica.geometry)) {
   if (geoArea({ type: 'Polygon', coordinates }) >= 2 * Math.PI) throw new Error('Antarctica: a polygon is inverted');
 }
 
 const fc = (features: Feature[]) => ({ type: 'FeatureCollection', features }) as FeatureCollection;
-const topo: any = topology(
-  {
-    seas: fc(seaFeatures),
-    waters: fc(waterFeatures),
-    antarctica: fc([{ type: 'Feature', id: 'antarctica', properties: {}, geometry: antarctica.geometry }]),
-  },
-  QUANTIZE,
-);
+
+// Quantize ourselves first, onto the grid topology() will use (same bounding box, same QUANTIZE), so the rings can be
+// cleaned on the grid: two points that land on one grid point merge, and a there-and-back spike (a, b, a) goes. A
+// spike that crosses the edge of a clipped view (an orthographic map's horizon) makes d3 fill the wrong side.
+{
+  const all = [...seaFeatures, ...waterFeatures, antarctica].flatMap((f) => asPolygons(f.geometry).flat(2));
+  const [x0, x1] = [Math.min(...all.map((p) => p[0])), Math.max(...all.map((p) => p[0]))];
+  const [y0, y1] = [Math.min(...all.map((p) => p[1])), Math.max(...all.map((p) => p[1]))];
+  const [kx, ky] = [(x1 - x0) / (QUANTIZE - 1), (y1 - y0) / (QUANTIZE - 1)];
+  const onGrid = ([x, y]: number[]): Pair => [x0 + Math.round((x - x0) / kx) * kx, y0 + Math.round((y - y0) / ky) * ky];
+  const same = (a: Pair, b: Pair) => a[0] === b[0] && a[1] === b[1];
+  const clean = (ring: number[][]): Pair[] => {
+    const pts = ring.slice(0, -1).map(onGrid);
+    for (let changed = true; changed && pts.length >= 3; ) {
+      changed = false;
+      for (let i = 0; i < pts.length && pts.length >= 3; i++) {
+        const [prev, cur, next] = [pts[(i + pts.length - 1) % pts.length], pts[i], pts[(i + 1) % pts.length]];
+        if (same(cur, next)) pts.splice(i, 1);
+        else if (same(prev, next)) pts.splice(i, 2 - Number(i === pts.length - 1));
+        else continue;
+        changed = true;
+        i = Math.max(-1, i - 2);
+      }
+    }
+    return pts.length >= 3 ? [...pts, pts[0]] : [];
+  };
+  for (const f of [...seaFeatures, ...waterFeatures]) {
+    f.geometry.coordinates = f.geometry.coordinates
+      .map((poly) => poly.map(clean))
+      .filter((poly) => poly[0].length)
+      .map((poly) => poly.filter((ring) => ring.length));
+  }
+}
+// Quantization can collapse a thin polygon to nothing, or turn it or one of its holes inside out (d3 then reads a
+// polygon as the whole sphere, or a hole as a second exterior, which breaks clipping at the map edge). Any such polygon
+// (under 1 km² or inverted) or hole is dropped, and the topology built again.
+let topo: any;
+for (let round = 0; ; round++) {
+  topo = topology(
+    {
+      seas: fc(seaFeatures),
+      waters: fc(waterFeatures),
+      antarctica: fc([{ type: 'Feature', id: 'antarctica', properties: {}, geometry: antarctica.geometry }]),
+    },
+    QUANTIZE,
+  );
+  let dropped = 0;
+  for (const [name, input] of [['seas', seaFeatures], ['waters', waterFeatures]] as const) {
+    const out = (feature(topo, topo.objects[name]) as unknown as FeatureCollection<MultiPolygon>).features;
+    out.forEach((f, i) => {
+      const polys = f.geometry.coordinates;
+      const given = input[i].geometry.coordinates;
+      if (polys.length !== given.length || polys.some((p, j) => p.length !== given[j].length)) throw new Error(`${f.id}: topology changed the rings`);
+      const ringArea = (ring: Polygon['coordinates'][number]) => geoArea({ type: 'Polygon', coordinates: [ring] });
+      const kept = given.flatMap((poly, j) => {
+        const area = geoArea({ type: 'Polygon', coordinates: polys[j] });
+        if (area >= 2 * Math.PI || km2(area) < SLIVER_KM2 || ringArea(polys[j][0]) >= 2 * Math.PI) return (dropped++, []);
+        const holes = poly.slice(1).filter((_, k) => ringArea(polys[j][k + 1]) >= 2 * Math.PI);
+        dropped += poly.length - 1 - holes.length;
+        return [[poly[0], ...holes]];
+      });
+      if (!kept.length) throw new Error(`${f.id}: nothing left after quantization`);
+      input[i].geometry.coordinates = kept;
+    });
+  }
+  if (!dropped) break;
+  console.log(`  quantization: dropped ${dropped} polygons or holes that collapsed`);
+  if (round === 3) throw new Error('Quantization keeps collapsing polygons');
+}
 writeFileSync(OUT_TOPO, JSON.stringify(topo));
 
 // ---- Meta, from the shapes as stored ----
