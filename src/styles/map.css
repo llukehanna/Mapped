@@ -23,7 +23,7 @@
 .hatch-bg { fill: var(--missed); }
 .hatch-line { stroke: var(--missed-line); stroke-width: 1.2; }
 .territory-bg { fill: var(--territory); }
-.territory-line { stroke: var(--land); stroke-width: 1.2; }
+.territory-line { stroke: var(--territory-line); stroke-width: 1.6; }
 
 .hl { fill: none; vector-effect: non-scaling-stroke; pointer-events: none; }
 .hl.hint { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; animation: dash 1s linear infinite; }
