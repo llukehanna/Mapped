@@ -71,6 +71,7 @@ const LEARN_CARD_EXTRA = { small: 254, wide: 268 };
 const DEFAULT_CONFIG: GameConfig = { mode: 'type', scope: WORLD, timeLimitSec: null };
 const INDEX = buildIndex(COUNTRIES, TERRITORIES);
 /** Territory shape → the country whose color it shares (Greenland → Denmark). */
+const TERRITORY = new Map(TERRITORIES.map((t) => [t.id, t]));
 const OWNERS = new Map(TERRITORIES.flatMap((t) => (t.sovereign && t.geo ? [[t.id, t.sovereign] as const] : [])));
 const clue = (config: GameConfig, level: number, id: string) =>
   clueFor(config, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
@@ -129,6 +130,8 @@ export function App() {
   const [mapFlash, setMapFlash] = useTransient<Highlight>(1800);
   const [hovered, setHovered] = useState<string | null>(null);
   const [tip, setTip] = useState<{ id: string; x: number; y: number } | null>(null);
+  /** A striped area under the pointer (Western Sahara, Somaliland…): named on hover, except mid-game where it would hint. */
+  const [areaTip, setAreaTip] = useState<{ id: string; x: number; y: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [newBest, setNewBest] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
@@ -442,6 +445,7 @@ export function App() {
     wrongChoicesNow.current = null;
     setWrongChoices(null);
     setTip(null);
+    setAreaTip(null);
     setConfirming(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
@@ -449,6 +453,7 @@ export function App() {
   function startLearning(scope = draft.scope) {
     setMenuOpen(false);
     setTip(null);
+    setAreaTip(null);
     learnZoomed.current = false;
     learn.start(scope);
   }
@@ -578,7 +583,8 @@ export function App() {
   const pool = useMemo(() => (state.phase === 'setup' ? poolFor(draft.scope, COUNTRIES) : state.pool), [state.phase, draft.scope, state.pool]);
   const frame = useMemo(() => (isWorld(config.scope) ? ('world' as const) : new Set(pool)), [config.scope, pool]);
   const rotate = rotationFor(new Set(pool.map((id) => COUNTRY.get(id)!.continent)));
-  const shapeList = Array.isArray(shapes) ? shapes : null;
+  const mapData = shapes && !(shapes instanceof Error) ? shapes : null;
+  const shapeList = mapData?.shapes ?? null;
   // Every shape, plus countries drawn only as a marker (Tuvalu has no shape at this scale), so markers get a state too.
   const allIds = useMemo(() => {
     const ids = shapeList?.map((s) => s.id) ?? [];
@@ -696,10 +702,11 @@ export function App() {
   return (
     <div className={`app phase-${learn.session ? 'learn' : state.phase}`} style={{ '--kb': `${keyboard}px` } as CSSProperties}>
       <div className="map-wrap" ref={wrapRef}>
-        {shapeList && size.width > 0 && (
+        {mapData && size.width > 0 && (
           <WorldMap
             ref={mapRef}
-            shapes={shapeList}
+            shapes={mapData.shapes}
+            disputed={mapData.disputed}
             width={size.width}
             height={size.height}
             rotate={rotate}
@@ -717,6 +724,7 @@ export function App() {
                 ? (id, x, y) => setTip(id && state.pool.includes(id) ? { id, x, y } : null)
                 : undefined
             }
+            onAreaHover={state.phase === 'playing' ? undefined : (id, x, y) => setAreaTip(id ? { id, x, y } : null)}
           />
         )}
       </div>
@@ -961,12 +969,18 @@ export function App() {
             </button>
           )}
           <ZoomControls onIn={() => mapRef.current?.zoomBy(1.6)} onOut={() => mapRef.current?.zoomBy(1 / 1.6)} onFit={() => mapRef.current?.fit()} />
-          {tip && (
+          {tip && !areaTip && (
             <div className="tip glass" style={{ left: tip.x + 14, top: tip.y - 40 }}>
               <b>{nameOf(tip.id)}</b> <span className="mute">· {COUNTRY.get(tip.id)!.subregion}</span>
             </div>
           )}
         </>
+      )}
+
+      {areaTip && state.phase !== 'playing' && (
+        <div className="tip glass" style={{ left: areaTip.x + 14, top: areaTip.y - 40 }}>
+          <b>{TERRITORY.get(areaTip.id)!.name}</b> <span className="mute">· {TERRITORY.get(areaTip.id)!.note}</span>
+        </div>
       )}
 
       {overlay}

@@ -155,3 +155,24 @@ test('light mode is remembered across reloads', async ({ page }) => {
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
+
+test('striped disputed areas are named on hover, but not mid-game, and clicks go to the country beneath', async ({ page }) => {
+  await openSetup(page);
+  await page.getByRole('button', { name: /^Africa/ }).click();
+  await page.waitForTimeout(700);
+  const box = (await page.locator('path[data-area="t-somaliland"]').boundingBox())!;
+  const tip = page.locator('.tip');
+  // Somaliland is a thin wedge: try points across its box until one is inside it.
+  let at: [number, number] | null = null;
+  for (let fy = 0.2; fy < 1 && !at; fy += 0.1)
+    for (let fx = 0.2; fx < 1 && !at; fx += 0.1) {
+      await page.mouse.move(box.x + box.width * fx, box.y + box.height * fy);
+      if (await tip.filter({ hasText: 'Somaliland' }).count()) at = [box.x + box.width * fx, box.y + box.height * fy];
+    }
+  expect(at).not.toBeNull();
+  expect(await page.evaluate(([x, y]) => (document.elementFromPoint(x, y) as HTMLElement).dataset.id, at!)).toBe('SOM');
+  await start(page);
+  await page.waitForTimeout(700);
+  await page.mouse.move(at![0] + 1, at![1] + 1);
+  await expect(tip).toHaveCount(0);
+});
