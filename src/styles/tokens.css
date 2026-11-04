@@ -30,6 +30,7 @@
   --missed-line: #ffffff40;
   --off: #1d1a17;
   --territory: #26221e;
+  --territory-line: #62564a;
   --marker: #d8cfc2aa;
   --danger: #ff8a73;
   --chrome-bg: linear-gradient(170deg, #ffffff17, #ffffff06);
@@ -64,6 +65,7 @@
   --missed-line: #ffffff66;
   --off: #e4dfd5;
   --territory: #e9e4da;
+  --territory-line: #c4baa8;
   --marker: #6b6358;
   --danger: #b5432f;
   --chrome-bg: linear-gradient(170deg, #ffffffcc, #ffffff99);
