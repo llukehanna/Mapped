@@ -1,4 +1,4 @@
-import { geoArea, geoCentroid, geoDistance, geoPath, type GeoProjection } from 'd3-geo';
+import { geoArea, geoCentroid, geoDistance, geoPath, geoStream, type GeoProjection } from 'd3-geo';
 import { geoPatterson } from 'd3-geo-projection';
 import { zoomIdentity, type ZoomTransform } from 'd3-zoom';
 import type { Feature, MultiPolygon, Polygon, Position } from 'geojson';
@@ -85,6 +85,34 @@ export function frameBounds(
     if (p) extend([p, p] as Bounds);
   }
   return Number.isFinite(x0) ? [[x0, y0], [x1, y1]] : worldBounds(projection, band);
+}
+
+/**
+ * Pixel bounds, under `projection`, of each piece of `geometry` as drawn: a shape the map edge cuts through (the Pacific, Russia, Fiji)
+ * comes back as separate pieces at opposite edges, where `geoPath.bounds` would span the whole map.
+ */
+export function pieceBounds(projection: GeoProjection, geometry: Polygon | MultiPolygon): Bounds[] {
+  const out: Bounds[] = [];
+  let ring: [number, number, number, number] | null = null;
+  geoStream(
+    geometry,
+    projection.stream({
+      point(x, y) {
+        if (ring) ring = [Math.min(ring[0], x), Math.min(ring[1], y), Math.max(ring[2], x), Math.max(ring[3], y)];
+      },
+      lineStart() {
+        ring = [Infinity, Infinity, -Infinity, -Infinity];
+      },
+      lineEnd() {
+        if (ring && ring[0] <= ring[2]) out.push([[ring[0], ring[1]], [ring[2], ring[3]]]);
+        ring = null;
+      },
+      polygonStart() {},
+      polygonEnd() {},
+      sphere() {},
+    }),
+  );
+  return out;
 }
 
 /** The full width of the map, between the band's southern and northern limits. */

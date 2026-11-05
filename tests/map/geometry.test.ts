@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { geoCentroid } from 'd3-geo';
+import { geoCentroid, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import { describe, expect, it } from 'vitest';
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 import { GEO_META } from '../../src/data/geoMeta.ts';
-import { baseProjection, fitTransform, frameBounds, prepareShapes, rotationFor, SEA_BAND, WORLD_OVERSCAN } from '../../src/map/geometry.ts';
+import { baseProjection, fitTransform, frameBounds, pieceBounds, prepareShapes, rotationFor, SEA_BAND, WORLD_OVERSCAN } from '../../src/map/geometry.ts';
 
 const topo = JSON.parse(readFileSync(new URL('../../src/data/world.topo.json', import.meta.url), 'utf8'));
 const shapes = prepareShapes((feature(topo, topo.objects.countries) as unknown as FeatureCollection<Polygon | MultiPolygon>).features);
@@ -78,5 +78,33 @@ describe('bands', () => {
     expect(seaBottom).toBeGreaterThan(landBottom);
     expect(seaBottom).toBeCloseTo(p([10, -80])![1], 0);
     expect(seaTop).toBeLessThanOrEqual(landTop);
+  });
+});
+
+describe('pieceBounds', () => {
+  const projection = baseProjection(1280, 720, -10);
+  const box = (w: number, e: number, s: number, n: number): Polygon => ({ type: 'Polygon', coordinates: [[[w, s], [w, n], [e, n], [e, s], [w, s]]] }); // clockwise, as d3-geo wants
+
+  it('gives a shape away from the map edge one piece, as geoPath.bounds would', () => {
+    const pieces = pieceBounds(projection, box(0, 20, 0, 20));
+    expect(pieces).toHaveLength(1);
+    const [[x0, y0], [x1, y1]] = pieces[0];
+    const [[a, b], [c, d]] = geoPath(projection).bounds(box(0, 20, 0, 20));
+    for (const [p, q] of [[x0, a], [y0, b], [x1, c], [y1, d]]) expect(p).toBeCloseTo(q, 0);
+  });
+
+  it('splits a shape the map edge (170°W) cuts through into a narrow piece at each edge', () => {
+    // 160°E to 160°W: the full map-wide box by geoPath.bounds, two pieces drawn.
+    const shape = box(160, -160, 0, 20);
+    const [[whole0], [whole1]] = geoPath(projection).bounds(shape);
+    expect(whole1 - whole0).toBeGreaterThan(1200);
+    const pieces = pieceBounds(projection, shape).sort((p, q) => p[0][0] - q[0][0]);
+    expect(pieces).toHaveLength(2);
+    const [left, right] = pieces;
+    // 10° of map on the left (170°W to 160°W), 30° on the right (160°E to 170°W): each about 3.4 px a degree.
+    expect(left[0][0]).toBeCloseTo(whole0, 0);
+    expect(left[1][0] - left[0][0]).toBeLessThan(50);
+    expect(right[1][0]).toBeCloseTo(whole1, 0);
+    expect(right[1][0] - right[0][0]).toBeLessThan(120);
   });
 });

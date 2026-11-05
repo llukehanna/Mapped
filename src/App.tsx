@@ -10,14 +10,13 @@ import { flagSrc } from './data/flags.ts';
 import { GEO_META } from './data/geoMeta.ts';
 import { COUNTRY, nameOf } from './data/lookup.ts';
 import { SEA_META } from './data/seaMeta.ts';
-import { OCEANS, SEA, SEAS } from './data/seas.ts';
 import { TERRITORIES } from './data/territories.ts';
 import { formatClock, formatCountdown } from './game/format.ts';
 import { FACTS } from './data/facts.ts';
 import { capitalChoices } from './game/capitalChoices.ts';
 import { removedChoices } from './game/choices.ts';
 import { flagChoices } from './game/flagChoices.ts';
-import { clueFor, seaClue } from './game/hints.ts';
+import { clueFor, hintRegion, seaClue } from './game/hints.ts';
 import { learnStats } from './game/learn.ts';
 import type { LogEntry } from './game/log.ts';
 import { boardFor, boardKey, parseBoard, type Board } from './game/ranking.ts';
@@ -25,7 +24,7 @@ import { groupFor, progressRowsFor } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
 import { isWorld, poolFor, poolOf, scopeLabel, WORLD } from './game/scope.ts';
-import { ANSWER_NOUN, hintLevels, isPick, rulesFor, TOPIC_LABEL, topicOf, type Topic } from './game/topics.ts';
+import { ANSWER_NOUN, hintLevels, isPick, rulesFor, TOPIC_LABEL, topicOf } from './game/topics.ts';
 import type { GameConfig } from './game/types.ts';
 import { rotationFor, SEA_BAND, type Rect } from './map/geometry.ts';
 import { useSeaShapes, type SeaMapData } from './map/useSeaShapes.ts';
@@ -86,12 +85,6 @@ const clue = (config: GameConfig, level: number, id: string) =>
 const PANEL_HIDES = 1 / 3;
 /** Seas games: no disputed areas and no markers (a stable empty list, as the map memoizes on it). */
 const NONE: never[] = [];
-/** The ids framed by the level-1 Locate hint: the target's subregion, or for Seas its basin. None for an ocean (its basin would be itself). */
-const regionOf = (topic: Topic, id: string): string[] | null => {
-  if (topic === 'seas') return OCEANS.has(id) ? null : SEAS.filter((s) => s.basin === SEA.get(id)!.basin).map((s) => s.id);
-  const sub = COUNTRY.get(id)!.subregion;
-  return COUNTRIES.filter((c) => c.subregion === sub).map((c) => c.id);
-};
 
 /** What WorldMap draws: the countries, or for Seas the seas with hatched water under them and the land (Antarctica too) over them. */
 function useMapLayers(seas: boolean, land: MapData | null, water: SeaMapData | null) {
@@ -281,7 +274,7 @@ export function App() {
     } else if (e.kind === 'hint') {
       setAnnouncement(`Hint: ${clue(state.config, e.level, e.id)}`);
       // Clicking answers: show the target's region only, then close in for the circle.
-      const region = rules.answer === 'click' && e.level === 1 ? regionOf(topic, e.id) : null;
+      const region = rules.answer === 'click' && e.level === 1 ? hintRegion(topic, e.id) : null;
       if (region) mapRef.current?.frameIds(region, 6);
       if (rules.answer === 'click' && e.level === 3) mapRef.current?.focus(e.id, 3);
     }
@@ -773,8 +766,13 @@ export function App() {
           />
         )}
       </div>
-      {!layers && !mapError && <div className="loading mute">Loading the map…</div>}
-      {mapError && <div className="loading">{mapError.message}. Reload to try again.</div>}
+      {/* Seas setup says it once, on the card by Start. */}
+      {!(seaWait && state.phase === 'setup' && !learn.session) && (
+        <>
+          {!layers && !mapError && <div className="loading mute">Loading the map…</div>}
+          {mapError && <div className="loading">{mapError.message}. Reload to try again.</div>}
+        </>
+      )}
 
       {state.phase === 'setup' && !learn.session && (
         <>

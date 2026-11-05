@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FACTS } from '../../src/data/facts.ts';
 import { GEO_META } from '../../src/data/geoMeta.ts';
 import { COUNTRY, nameOf } from '../../src/data/lookup.ts';
-import { clueFor, clueText, letterCount, letterPattern, seaClue } from '../../src/game/hints.ts';
+import { clueFor, clueText, hintRegion, letterCount, letterPattern, seaClue } from '../../src/game/hints.ts';
 import { hintLevels } from '../../src/game/topics.ts';
 
 const clue = (mode: 'type' | 'identify' | 'locate', level: number, id: string) =>
@@ -106,5 +106,20 @@ describe('seas hints', () => {
     expect(seaClue('identify', 1, 'tasman')).toBe('Starts with T');
     expect(seaClue('type', 2, 'tasman')).toBe('T _ _ _ _ _   _ _ _ · 6 + 3 letters');
     expect(seaClue('type', 3, 'tasman')).toBe('T _ _ _ _ _   _ _ a');
+  });
+});
+
+describe('hint region (the first Locate hint frames it)', () => {
+  it('frames the target among its neighbours: a sea in its basin, a country in its subregion', () => {
+    const aegean = hintRegion('seas', 'aegean')!;
+    expect(aegean).toContain('aegean');
+    expect(aegean).toContain('med');
+    expect(aegean.length).toBeGreaterThan(1);
+    expect(hintRegion('countries', 'FRA')).toEqual(expect.arrayContaining(['FRA', 'DEU', 'BEL']));
+  });
+
+  it('frames nothing that would be the answer alone: an ocean, or the Caspian (the only inland sea)', () => {
+    expect(hintRegion('seas', 'pac')).toBeNull();
+    expect(hintRegion('seas', 'caspian')).toBeNull();
   });
 });
