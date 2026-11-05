@@ -1,7 +1,7 @@
 import { capitalOf } from '../data/capitals.ts';
 import { flagSrc } from '../data/flags.ts';
-import { COUNTRY } from '../data/lookup.ts';
-import { groupOf } from '../game/progress.ts';
+import { nameOf } from '../data/lookup.ts';
+import { groupFor } from '../game/progress.ts';
 import type { Topic } from '../game/topics.ts';
 
 interface ReviewPanelProps {
@@ -17,9 +17,9 @@ const MISSED_LABEL: Record<Topic, string> = { countries: 'Missed countries', fla
 
 export function ReviewPanel({ topic, pool, missed, hovered, onHover, onPick }: ReviewPanelProps) {
   const groups = new Map<string, string[]>();
-  const label = (id: string) => (topic === 'capitals' ? `${capitalOf(id)} · ${COUNTRY.get(id)!.name}` : COUNTRY.get(id)!.name);
+  const label = (id: string) => (topic === 'capitals' ? `${capitalOf(id)} · ${nameOf(id)}` : nameOf(id));
   for (const id of [...missed].sort((a, b) => label(a).localeCompare(label(b)))) {
-    const g = groupOf(id, pool, COUNTRY);
+    const g = groupFor(topic, id, pool);
     groups.set(g, [...(groups.get(g) ?? []), id]);
   }
   return (
