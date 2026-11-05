@@ -6,7 +6,7 @@ import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import { GEO_META } from '../data/geoMeta.ts';
 import type { ShapeState } from '../ui/shapeStates.ts';
-import { baseProjection, fitTransform, frameBounds, WORLD_OVERSCAN, type Bounds, type MapShape, type Rect } from './geometry.ts';
+import { baseProjection, fitTransform, frameBounds, LAND_BAND, WORLD_OVERSCAN, type Band, type Bounds, type MapShape, type Rect } from './geometry.ts';
 
 export type HighlightKind = 'hint' | 'target' | 'wrong' | 'reveal' | 'hover';
 
@@ -55,6 +55,16 @@ interface WorldMapProps {
   onShapeHover?: (id: string | null, x: number, y: number) => void;
   /** the striped area under the pointer (a disputed area, or a territory outside every country), if any */
   onAreaHover?: (id: string | null, x: number, y: number) => void;
+  /** where each shape's label, marker and bounds fall when it has no shape of its own; defaults to the countries' */
+  anchors?: Readonly<Record<string, { anchor: [number, number] }>>;
+  /** the latitudes the world view frames; defaults to the land's */
+  band?: Band;
+  /** water in no one's game: hatched, drawn under the shapes, never clickable */
+  underlay?: readonly Feature<Polygon | MultiPolygon>[];
+  /** quiet land drawn over everything but the labels: hides the coast of the shapes under it and swallows their clicks */
+  overlay?: readonly Feature<Polygon | MultiPolygon>[];
+  /** 'seas' marks the svg for the seas styles */
+  variant?: 'land' | 'seas';
 }
 
 const MARKER_R = 5;
@@ -89,6 +99,8 @@ function offsetFor(id: string, radius: number): [number, number] {
 
 export function WorldMap(props: WorldMapProps) {
   const { shapes, disputed, width, height, rotate, frame, safe, states, markers, highlights, areaPulse, mode, reducedMotion } = props;
+  const anchors = props.anchors ?? GEO_META;
+  const band = props.band ?? LAND_BAND;
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
@@ -98,6 +110,8 @@ export function WorldMap(props: WorldMapProps) {
   const path = useMemo(() => geoPath(projection), [projection]);
   const paths = useMemo(() => new Map(shapes.map((s) => [s.id, path(s.geometry) ?? ''])), [shapes, path]);
   const byId = useMemo(() => new Map(shapes.map((s) => [s.id, s])), [shapes]);
+  const underlayPaths = useMemo(() => (props.underlay ?? []).map((f) => ({ id: String(f.id), d: path(f) ?? '' })), [props.underlay, path]);
+  const overlayPaths = useMemo(() => (props.overlay ?? []).map((f) => ({ id: String(f.id), d: path(f) ?? '' })), [props.overlay, path]);
   const disputedPaths = useMemo(() => disputed.map((f) => ({ id: String(f.id), d: path(f) ?? '' })), [disputed, path]);
   /** px across of each country's main landmass at zoom 1 */
   const mainSize = useMemo(() => {
@@ -111,8 +125,8 @@ export function WorldMap(props: WorldMapProps) {
 
   const frameKey = frame === 'world' ? 'world' : [...frame].sort().join(',');
   const target = useMemo(
-    () => fitTransform(frameBounds(projection, shapes, frame, GEO_META), safe, 12, frame === 'world' ? WORLD_OVERSCAN : undefined),
-    [projection, shapes, frameKey, safe.x, safe.y, safe.width, safe.height],
+    () => fitTransform(frameBounds(projection, shapes, frame, anchors, band), safe, 12, frame === 'world' ? WORLD_OVERSCAN : undefined),
+    [projection, shapes, anchors, band, frameKey, safe.x, safe.y, safe.width, safe.height],
   );
 
   function apply(next: ZoomTransform, ms: number) {
@@ -155,7 +169,7 @@ export function WorldMap(props: WorldMapProps) {
   function boundsOf(id: string): Bounds | null {
     const s = byId.get(id);
     if (s) return path.bounds(s.near) as Bounds;
-    const p = projection(GEO_META[id]?.anchor ?? [0, 0]);
+    const p = projection(anchors[id]?.anchor ?? [0, 0]);
     return p ? [[p[0] - 2, p[1] - 2], [p[0] + 2, p[1] + 2]] : null;
   }
 
@@ -172,7 +186,7 @@ export function WorldMap(props: WorldMapProps) {
       if (b) apply(fitTransform(b, safe, maxK), 650);
     },
     frameIds(ids, maxK = 8) {
-      apply(fitTransform(frameBounds(projection, shapes, new Set(ids), GEO_META), safe, maxK), 650);
+      apply(fitTransform(frameBounds(projection, shapes, new Set(ids), anchors, band), safe, maxK), 650);
     },
     isVisible(id, minPx) {
       const b = boundsOf(id);
@@ -198,7 +212,7 @@ export function WorldMap(props: WorldMapProps) {
   }
 
   const screen = (id: string): [number, number] | null => {
-    const p = projection(GEO_META[id]?.anchor ?? [0, 0]);
+    const p = projection(anchors[id]?.anchor ?? [0, 0]);
     return p ? (t.apply(p) as [number, number]) : null;
   };
 
@@ -214,7 +228,7 @@ export function WorldMap(props: WorldMapProps) {
   return (
     <svg
       ref={svgRef}
-      className={`map ${mode === 'locate' ? 'locating' : mode === 'pick' ? 'picking' : mode === 'review' ? 'reviewing' : ''}`}
+      className={`map${props.variant === 'seas' ? ' seas' : ''} ${mode === 'locate' ? 'locating' : mode === 'pick' ? 'picking' : mode === 'review' ? 'reviewing' : ''}`}
       width={width}
       height={height}
       role="img"
@@ -255,6 +269,9 @@ export function WorldMap(props: WorldMapProps) {
       <rect className="ocean" width={width} height={height} />
       <g ref={gRef}>
         <path className="grat" d={path(GRATICULE) ?? ''} />
+        {underlayPaths.map((a) => (
+          <path key={a.id} className="water" d={a.d} />
+        ))}
         <ShapeLayer shapes={shapes} paths={paths} states={states} />
         {disputedPaths.map((a) => (
           <path key={a.id} className="disputed" data-area={a.id} d={a.d} />
@@ -262,6 +279,9 @@ export function WorldMap(props: WorldMapProps) {
         {highlights.map((h) =>
           paths.has(h.id) ? <path key={`${h.kind}-${h.id}-${h.seq ?? 0}`} className={`hl ${h.kind}`} d={paths.get(h.id)} /> : null,
         )}
+        {overlayPaths.map((a) => (
+          <path key={a.id} className="cover" d={a.d} />
+        ))}
       </g>
       <g>
         {markers.map((id) => {

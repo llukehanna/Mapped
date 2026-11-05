@@ -38,9 +38,12 @@ export function prepareShapes(features: Feature<Polygon | MultiPolygon>[]): MapS
   });
 }
 
+/** The latitudes a world view frames, [south, north]. */
+export type Band = [south: number, north: number];
 /** Land runs from about 56°S (Cape Horn) to 83°N (northern Greenland); the world view frames this band. */
-const LAND_SOUTH = -56;
-const LAND_NORTH = 83;
+export const LAND_BAND: Band = [-56, 83];
+/** Seas reach the Southern Ocean's edge at 80°S, so a seas game frames deeper south. */
+export const SEA_BAND: Band = [-80, 84];
 /** The world view overscans a little: the outermost few % at the left and right edges are open ocean. */
 export const WORLD_OVERSCAN = 1.04;
 
@@ -61,9 +64,10 @@ export function frameBounds(
   shapes: readonly MapShape[],
   ids: ReadonlySet<string> | 'world',
   anchors: Readonly<Record<string, { anchor: [number, number] }>>,
+  band: Band = LAND_BAND,
 ): Bounds {
   const path = geoPath(projection);
-  if (ids === 'world') return worldBounds(projection);
+  if (ids === 'world') return worldBounds(projection, band);
   let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
   const extend = ([[a, b], [c, d]]: Bounds) => {
     [x0, y0, x1, y1] = [Math.min(x0, a), Math.min(y0, b), Math.max(x1, c), Math.max(y1, d)];
@@ -80,16 +84,14 @@ export function frameBounds(
     const p = drawn.has(id) ? null : projection(anchors[id]?.anchor ?? [0, 0]);
     if (p) extend([p, p] as Bounds);
   }
-  return Number.isFinite(x0) ? [[x0, y0], [x1, y1]] : worldBounds(projection);
+  return Number.isFinite(x0) ? [[x0, y0], [x1, y1]] : worldBounds(projection, band);
 }
 
-/** The full width of the map, between the land's southern and northern limits. */
-function worldBounds(projection: GeoProjection): Bounds {
+/** The full width of the map, between the band's southern and northern limits. */
+function worldBounds(projection: GeoProjection, [south, north]: Band): Bounds {
   const [[x0], [x1]] = geoPath(projection).bounds({ type: 'Sphere' });
   const center = -projection.rotate()[0];
-  const north = projection([center, LAND_NORTH])![1];
-  const south = projection([center, LAND_SOUTH])![1];
-  return [[x0, north], [x1, south]];
+  return [[x0, projection([center, north])![1]], [x1, projection([center, south])![1]]];
 }
 
 /**

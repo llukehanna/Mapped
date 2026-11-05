@@ -15,6 +15,8 @@
 .shape.off { fill: var(--off); stroke: var(--border-off); pointer-events: none; }
 .shape.territory { fill: url(#territory-hatch); stroke: var(--border); pointer-events: none; }
 .shape.dep { pointer-events: none; }
+.map.seas .water { fill: url(#territory-hatch); pointer-events: none; }
+.map.seas .cover { fill: var(--off); stroke: var(--border-off); stroke-width: 0.6; vector-effect: non-scaling-stroke; }
 .map.locating .shape.todo:hover, .map.locating .shape.found:hover { fill: var(--land-hover); }
 .map.picking .shape.todo:hover { fill: var(--land-hover); cursor: pointer; }
 .map.picking .marker-hit { cursor: pointer; }
