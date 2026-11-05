@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD_REGIONS, boardFor, boardKey, boardLabel, compareRuns, parseBoard, parseConfig } from '../../src/game/ranking.ts';
+import { BOARD_REGIONS, boardFor, boardRegions, boardKey, boardLabel, compareRuns, parseBoard, parseConfig } from '../../src/game/ranking.ts';
 import type { GameConfig } from '../../src/game/types.ts';
 
 const cfg = (continents: string[], subregions: string[] = [], mode: GameConfig['mode'] = 'type'): GameConfig =>
@@ -88,5 +88,19 @@ describe('topics on boards', () => {
     expect(parseConfig({ ...base, topic: 'countries' })).not.toHaveProperty('topic');
     expect(parseConfig(base)).not.toHaveProperty('topic');
     expect(parseConfig({ ...base, topic: 'rivers' })).toBeNull();
+  });
+  it('Seas has one board per mode, on World only', () => {
+    expect(boardRegions('seas')).toEqual(['world']);
+    expect(boardRegions('flags')).toEqual(BOARD_REGIONS);
+    expect(parseBoard('seas:locate:world')).toEqual({ topic: 'seas', mode: 'locate', region: 'world' });
+    expect(parseBoard('seas:type:europe')).toBeNull();
+    expect(boardFor({ topic: 'seas', mode: 'type', scope: { continents: [], subregions: [] }, timeLimitSec: null })).toBe('seas:type:world');
+    expect(boardLabel('seas:identify:world')).toBe('World · Seas · Identify');
+  });
+  it('parseConfig rejects a Seas config with any continent or subregion', () => {
+    const seas = { topic: 'seas', mode: 'type', timeLimitSec: null };
+    expect(parseConfig({ ...seas, scope: { continents: [], subregions: [] } })).toMatchObject({ topic: 'seas' });
+    expect(parseConfig({ ...seas, scope: { continents: ['europe'], subregions: [] } })).toBeNull();
+    expect(parseConfig({ ...seas, scope: { continents: [], subregions: ['Caribbean'] } })).toBeNull();
   });
 });

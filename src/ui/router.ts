@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BOARD_MODES, BOARD_REGIONS, type Region } from '../game/ranking.ts';
+import { BOARD_MODES, boardRegions, type Region } from '../game/ranking.ts';
 import type { Topic } from '../game/topics.ts';
 import type { Mode } from '../game/types.ts';
 
@@ -9,12 +9,12 @@ export function parseRoute(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '') || '/';
   if (path === '/signin') return { name: 'signin' };
   if (path === '/me') return { name: 'me' };
-  const board = /^\/leaderboards(?:\/(flags|capitals))?(?:\/([a-z]+)\/([a-z-]+))?$/.exec(path);
+  const board = /^\/leaderboards(?:\/(flags|capitals|seas))?(?:\/([a-z]+)\/([a-z-]+))?$/.exec(path);
   if (board) {
     const topic = (board[1] ?? 'countries') as Topic;
     const mode = (board[2] ?? 'type') as Mode;
     const region = (board[3] ?? 'world') as Region;
-    if (BOARD_MODES.includes(mode) && BOARD_REGIONS.includes(region)) return { name: 'board', topic, mode, region };
+    if (BOARD_MODES.includes(mode) && boardRegions(topic).includes(region)) return { name: 'board', topic, mode, region };
   }
   return { name: 'home' };
 }

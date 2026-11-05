@@ -44,6 +44,25 @@ it('a flags game goes on its own board', async () => {
   expect(await res.json()).toMatchObject({ ranked: true, board: 'flags:type:south-america', best: { rank: 1 } });
 });
 
+it('a Seas · Type game is ranked on the World seas board, out of 55', async () => {
+  const ana = await signIn(env, 'ana@example.com', 'meridian');
+  const config: GameConfig = { topic: 'seas', mode: 'type', scope: { continents: [], subregions: [] }, timeLimitSec: null };
+  const game = await start(ana, config);
+  expect(game.board).toBe('seas:type:world');
+  const moves: Move = (s, now) => (s.found.length < 2 ? { type: 'found', id: ['med', 'pac'][s.found.length], now } : { type: 'giveUp', now });
+  const res = await call(env, 'POST', `/api/games/${game.id}/finish`, { cookie: ana, body: { log: play(config, game.seed, moves, 2000) } });
+  expect(await res.json()).toMatchObject({ ranked: true, board: 'seas:type:world', found: 2, total: 55, best: { rank: 1 } });
+  expect(await board(ana, 'seas/type/world')).toMatchObject({ board: 'seas:type:world', rows: [{ name: 'meridian', found: 2, total: 55 }] });
+  expect((await call(env, 'GET', '/api/boards/seas/type/europe')).status).toBe(404);
+});
+
+it('a Seas setup scoped to a continent is a bad config', async () => {
+  const config = { topic: 'seas', mode: 'type', scope: { continents: ['europe'], subregions: [] }, timeLimitSec: null };
+  const res = await call(env, 'POST', '/api/games', { body: { config } });
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ error: 'bad_config' });
+});
+
 it('topic board routes', async () => {
   expect((await call(env, 'GET', '/api/boards/flags/type/world')).status).toBe(200);
   expect(await (await call(env, 'GET', '/api/boards/flags/type/world')).json()).toMatchObject({ board: 'flags:type:world', rows: [] });

@@ -34,4 +34,11 @@ describe('routes', () => {
     expect(routePath({ name: 'board', topic: 'capitals', mode: 'type', region: 'europe' })).toBe('/leaderboards/capitals/type/europe');
     expect(routePath({ name: 'board', topic: 'countries', mode: 'type', region: 'europe' })).toBe('/leaderboards/type/europe');
   });
+
+  it('seas boards are World only', () => {
+    expect(parseRoute('/leaderboards/seas/identify/world')).toEqual({ name: 'board', topic: 'seas', mode: 'identify', region: 'world' });
+    expect(parseRoute('/leaderboards/seas')).toEqual({ name: 'board', topic: 'seas', mode: 'type', region: 'world' });
+    expect(parseRoute('/leaderboards/seas/type/europe')).toEqual({ name: 'home' });
+    expect(parseRoute(routePath({ name: 'board', topic: 'seas', mode: 'locate', region: 'world' }))).toEqual({ name: 'board', topic: 'seas', mode: 'locate', region: 'world' });
+  });
 });

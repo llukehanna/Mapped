@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type ApiError } from '../api/client.ts';
 import type { MyGamesResponse, User } from '../api/types.ts';
 import { formatClock } from '../game/format.ts';
-import { BOARD_MODES, BOARD_REGIONS, boardKey, regionLabel, type Board } from '../game/ranking.ts';
+import { BOARD_MODES, boardKey, boardRegions, regionLabel, type Board } from '../game/ranking.ts';
 import { scopeFromKey, scopeLabel } from '../game/scope.ts';
 import { TOPIC_LABEL, type Topic } from '../game/topics.ts';
 import { hintsText, REASON_TEXT } from './accountText.ts';
@@ -43,7 +43,7 @@ export function YourGames({ user, onBoard, onClose, onSignedOut }: { user: User;
                   {modeLabel(m)}
                 </span>
               ))}
-              {BOARD_REGIONS.map((r) => (
+              {boardRegions(topic).map((r) => (
                 <div key={r} className="bests-row">
                   <span className="mute">{regionLabel(r)}</span>
                   {BOARD_MODES.map((m) => {

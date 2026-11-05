@@ -13,6 +13,8 @@ export type Region = 'world' | Continent;
 export const BOARD_MODES: Mode[] = ['type', 'locate', 'identify'];
 export const BOARD_REGIONS: Region[] = ['world', ...CONTINENTS.map((c) => c.id)];
 export const BOARD_TOPICS: Topic[] = TOPICS;
+/** The regions a topic has boards for: Seas has no continents, so only World. */
+export const boardRegions = (topic: Topic): Region[] => (topic === 'seas' ? ['world'] : BOARD_REGIONS);
 export type Board = `${Mode}:${Region}` | `${Exclude<Topic, 'countries'>}:${Mode}:${Region}`;
 
 export function boardKey(topic: Topic, mode: Mode, region: Region): Board {
@@ -33,7 +35,7 @@ export function parseBoard(board: string): { topic: Topic; mode: Mode; region: R
   const parts = board.split(':');
   const [topic, mode, region] = parts.length === 2 ? ['countries', ...parts] : parts;
   if (parts.length === 3 && topic === 'countries') return null;
-  if (parts.length > 3 || !TOPICS.includes(topic as Topic) || !BOARD_MODES.includes(mode as Mode) || !BOARD_REGIONS.includes(region as Region)) return null;
+  if (parts.length > 3 || !TOPICS.includes(topic as Topic) || !BOARD_MODES.includes(mode as Mode) || !boardRegions(topic as Topic).includes(region as Region)) return null;
   return { topic: topic as Topic, mode: mode as Mode, region: region as Region };
 }
 
@@ -72,6 +74,7 @@ export function parseConfig(value: unknown): GameConfig | null {
   if (new Set(continents).size !== continents.length || new Set(subregions).size !== subregions.length) return null;
   const limitOk = timeLimitSec === null || (Number.isInteger(timeLimitSec) && (timeLimitSec as number) >= 60 && (timeLimitSec as number) <= 3600);
   if (!limitOk) return null;
+  if (topic === 'seas' && (continents.length > 0 || subregions.length > 0)) return null;
   const clean: Scope = { continents: continents as Continent[], subregions };
   return { ...(topic && topic !== 'countries' ? { topic: topic as Topic } : {}), mode: mode as Mode, scope: clean, timeLimitSec: timeLimitSec as number | null };
 }

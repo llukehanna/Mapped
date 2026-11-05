@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { BoardResponse, BoardRow } from '../api/types.ts';
 import { formatClock } from '../game/format.ts';
-import { BOARD_MODES, BOARD_REGIONS, regionLabel, type Region } from '../game/ranking.ts';
+import { BOARD_MODES, boardRegions, regionLabel, type Region } from '../game/ranking.ts';
 import type { Topic } from '../game/topics.ts';
 import type { Mode } from '../game/types.ts';
 import { CenterCard } from './CenterCard.tsx';
@@ -68,7 +68,7 @@ export function Leaderboard({ topic, mode, region, onPick, onClose }: Leaderboar
 
   return (
     <CenterCard label="Leaderboards" title="Leaderboards" wide onClose={onClose}>
-      <TopicTabs topic={topic} onPick={(t) => onPick(t, mode, region)} />
+      <TopicTabs topic={topic} onPick={(t) => onPick(t, mode, boardRegions(t).includes(region) ? region : 'world')} />
       <div className="seg board-modes" role="tablist" aria-label="Mode">
         {BOARD_MODES.map((m) => (
           <button key={m} type="button" role="tab" aria-selected={m === mode} className={m === mode ? 'on' : ''} onClick={() => onPick(topic, m, region)}>
@@ -77,7 +77,7 @@ export function Leaderboard({ topic, mode, region, onPick, onClose }: Leaderboar
         ))}
       </div>
       <div className="chips" role="group" aria-label="Region">
-        {BOARD_REGIONS.map((r) => (
+        {boardRegions(topic).map((r) => (
           <button key={r} type="button" className={`chip ${r === region ? 'on' : ''}`} aria-pressed={r === region} onClick={() => onPick(topic, mode, r)}>
             {regionLabel(r)}
           </button>
