@@ -6,7 +6,7 @@ import { CONTINENTS, isWorld, poolFor, poolOf, subregionsOf, WORLD } from '../ga
 import type { GameConfig, Mode, Scope } from '../game/types.ts';
 import type { BestSummary } from '../api/types.ts';
 import { boardFor, boardLabel } from '../game/ranking.ts';
-import { MODE_BLURB, TOPICS, TOPIC_LABEL, topicOf, type Topic } from '../game/topics.ts';
+import { ANSWER_NOUN, MODE_BLURB, TOPICS, TOPIC_LABEL, topicOf, type Topic } from '../game/topics.ts';
 import type { Result } from '../store/bests.ts';
 import { hintsText } from './accountText.ts';
 import { RankedTag } from './RankedTag.tsx';
@@ -65,14 +65,16 @@ interface SetupCardProps {
   /** of the selected region's flags, how many are learned on this browser */
   learned: number;
   onResetLearned: () => void;
+  /** Why Start can't be pressed yet (the sea map still loading, or failed); null when it can. */
+  waiting: string | null;
 }
 
-export function SetupCard({ config, best, serverBest, onChange, onStart, learn: learnOn, onLearn, learned, onResetLearned }: SetupCardProps) {
+export function SetupCard({ config, best, serverBest, onChange, onStart, learn: learnOn, onLearn, learned, onResetLearned, waiting }: SetupCardProps) {
   const [showSubs, setShowSubs] = useState(config.scope.subregions.length > 0);
   const scope = config.scope;
   const topic = topicOf(config);
   const total = poolOf(config).length;
-  const noun = topic === 'seas' ? 'seas' : 'countries';
+  const noun = ANSWER_NOUN[topic].many;
   const board = boardFor(config);
   const learn = learnOn && topic === 'flags';
   const setScope = (update: (scope: Scope) => Scope) => onChange((c) => ({ ...c, scope: update(c.scope) }));
@@ -195,7 +197,7 @@ export function SetupCard({ config, best, serverBest, onChange, onStart, learn: 
 
       {learn && (
         <div className="best">
-          <span>{total} countries · Practice · not ranked</span>
+          <span>{total} {noun} · Practice · not ranked</span>
           <span>
             <b>
               {learned} / {total}
@@ -238,7 +240,8 @@ export function SetupCard({ config, best, serverBest, onChange, onStart, learn: 
         )}
       </div>
 
-      <button type="button" className="start" onClick={onStart}>
+      {waiting && <p className="mute setup-wait">{waiting}</p>}
+      <button type="button" className="start" onClick={onStart} disabled={waiting !== null}>
         {learn ? 'Start learning' : 'Start'} <kbd>↵</kbd>
       </button>
     </section>
