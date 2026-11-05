@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/llukehanna/Mapped/actions/workflows/ci.yml/badge.svg)](https://github.com/llukehanna/Mapped/actions/workflows/ci.yml)
 
-How well do you know the map? Name every country, find them by clicking, or identify the highlighted one. Pick a topic: Countries, Flags (a flag, name its country) or Capitals (a country, name its capital; or a capital, find its country). Live at [mapped.lukeghanna.com](https://mapped.lukeghanna.com).
+How well do you know the map? Name every country, find them by clicking, or identify the highlighted one. Pick a topic: Countries, Flags (a flag, name its country), Capitals (a country, name its capital; or a capital, find its country) or Seas (55 oceans and seas). Live at [mapped.lukeghanna.com](https://mapped.lukeghanna.com).
 
 Anyone can play. Sign in with Google to save your games and get on the leaderboards.
 
@@ -13,6 +13,8 @@ Anyone can play. Sign in with Google to save your games and get on the leaderboa
 - **Identify**: a country lights up; type its name.
 
 The bullets above describe Countries. The modes work on every topic. In Flags, Type shows a flag and you name its country, Locate asks you to click the flag's country, and Identify lights up a country and offers four flags. In Capitals, Type and Identify name the country (Type: type its capital; Identify: pick its capital from 4). Locate gives you a capital and you click its country.
+
+In Seas, the seas are the board and the land goes quiet: the sea you haven't found is light, found ones turn gold, and land is a dark silhouette you can't click. Gulfs, bays and straits are hatched and aren't in the game; type one in Type mode and you get a note saying what it is, counting as nothing. Seas is World only, with no region picker. Locate hints name the basin first, then the coast.
 
 Hints are there if you're stuck, and they cost you on the leaderboard. Flags · Type has five: the region (skipped when the whole game is one region, like S. America), then the first letter, then the letter pattern with its count, then the first and last letters, then every other letter.
 
@@ -26,7 +28,7 @@ Progress is kept on this browser only, with a Reset link on the setup card. Noth
 
 ## Leaderboards
 
-There are 63 boards: 3 topics × 3 modes × 7 regions (the World and each continent). Anyone can look at them, signed in or not; only signed-in players with a name are on them. An open board refreshes when you come back to the tab. Capitals · Type and Identify runs from before the rules changed show up in Your games as "Unranked: older rules". Boards rank by most countries found, then fewest hints, then fastest time, so unfinished runs count too (a run that found nothing doesn't). Signing in adds this browser's earlier games to your account, plus any bests it saved before accounts existed (unranked). Your games shows your best run on each board even if you didn't finish it: most countries found, then fewest hints, then fastest.
+There are 66 boards: Countries, Flags and Capitals × 3 modes × 7 regions (the World and each continent), plus Seas × 3 modes (World only). Anyone can look at them, signed in or not; only signed-in players with a name are on them. An open board refreshes when you come back to the tab. Capitals · Type and Identify runs from before the rules changed show up in Your games as "Unranked: older rules". Boards rank by most countries found, then fewest hints, then fastest time, so unfinished runs count too (a run that found nothing doesn't). Signing in adds this browser's earlier games to your account, plus any bests it saved before accounts existed (unranked). Your games shows your best run on each board even if you didn't finish it: most countries found, then fewest hints, then fastest.
 
 The server keeps the score honest:
 
@@ -58,6 +60,7 @@ npm run dev
 | `npm run e2e` | Playwright end-to-end tests against the real Worker (builds first) |
 | `npm run dev:full` | The whole app locally, with a local D1 and fake sign-in |
 | `npm run geo` | Rebuild `src/data/world.topo.json` from Natural Earth |
+| `npm run seas` | Rebuild `src/data/seas.topo.json` and `seas-meta.json` from Natural Earth marine areas |
 | `npm run build-flags` | Rebuild the self-hosted flag SVGs in `public/flags/` from flag-icons |
 | `npm run build` | Typecheck, build, enforce the size budget |
 | `npm run deploy` | Build, apply database migrations, deploy to Cloudflare |
@@ -77,3 +80,5 @@ npm run recompute-bests -- --remote
 ## Credits
 
 Flags from [flag-icons](https://github.com/lipis/flag-icons) (MIT).
+
+Seas and oceans from [Natural Earth](https://www.naturalearthdata.com/) marine areas (public domain).
