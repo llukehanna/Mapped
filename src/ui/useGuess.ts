@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type Dispatch } from 'react';
 import { capitalOf } from '../data/capitals.ts';
-import { nameOf, TERRITORY } from '../data/lookup.ts';
+import { nameOf, noteOf } from '../data/lookup.ts';
 import { rulesFor } from '../game/topics.ts';
 import { target } from '../game/reducer.ts';
 import type { GameAction, GameState } from '../game/types.ts';
@@ -59,7 +59,7 @@ export function useGuess({ state, dispatch, index, say, flash, onHint }: GuessOp
         say(capitals ? `${capitalOf(r.id)} is ${nameOf(r.id)}'s capital, which isn't in this quiz` : `${nameOf(r.id)} isn't in this quiz`, 'warn');
         return true;
       case 'territory':
-        say(`${nameOf(r.id)}: ${TERRITORY.get(r.id)!.note}`, 'info');
+        say(`${nameOf(r.id)}: ${noteOf(r.id)}`, 'info');
         return true;
       default:
         return false;

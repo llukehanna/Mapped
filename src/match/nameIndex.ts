@@ -1,4 +1,4 @@
-import type { CountryDef, TerritoryDef } from '../data/types.ts';
+import type { CountryDef } from '../data/types.ts';
 import { normalize } from './normalize.ts';
 
 export interface NameIndex {
@@ -14,7 +14,7 @@ export interface NameIndex {
 
 type Named = Pick<CountryDef, 'id' | 'name' | 'aliases'>;
 
-export function buildIndex(countries: readonly Named[], territories: readonly TerritoryDef[]): NameIndex {
+export function buildIndex(countries: readonly Named[], territories: readonly Named[]): NameIndex {
   const byKey = new Map<string, string>();
   const keysOf = new Map<string, string[]>();
   for (const entry of [...countries, ...territories]) {
