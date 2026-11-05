@@ -4,7 +4,7 @@ import { feature } from 'topojson-client';
 import { describe, expect, it } from 'vitest';
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 import { GEO_META } from '../../src/data/geoMeta.ts';
-import { baseProjection, fitTransform, frameBounds, prepareShapes, rotationFor, WORLD_OVERSCAN } from '../../src/map/geometry.ts';
+import { baseProjection, fitTransform, frameBounds, prepareShapes, rotationFor, SEA_BAND, WORLD_OVERSCAN } from '../../src/map/geometry.ts';
 
 const topo = JSON.parse(readFileSync(new URL('../../src/data/world.topo.json', import.meta.url), 'utf8'));
 const shapes = prepareShapes((feature(topo, topo.objects.countries) as unknown as FeatureCollection<Polygon | MultiPolygon>).features);
@@ -67,5 +67,16 @@ describe('rotationFor', () => {
     expect(rotationFor(['oceania'])).toBe(-160);
     expect(rotationFor(['oceania', 'asia'])).toBe(-10);
     expect(rotationFor([])).toBe(-10);
+  });
+});
+
+describe('bands', () => {
+  it('the seas band frames down to 80°S', () => {
+    const p = baseProjection(1200, 800, -10);
+    const [[, landTop], [, landBottom]] = frameBounds(p, [], 'world', {});
+    const [[, seaTop], [, seaBottom]] = frameBounds(p, [], 'world', {}, SEA_BAND);
+    expect(seaBottom).toBeGreaterThan(landBottom);
+    expect(seaBottom).toBeCloseTo(p([10, -80])![1], 0);
+    expect(seaTop).toBeLessThanOrEqual(landTop);
   });
 });
