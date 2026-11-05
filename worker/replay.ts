@@ -1,10 +1,9 @@
 import type { UnrankedReason } from '../src/api/types.ts';
-import { COUNTRIES } from '../src/data/countries.ts';
 import { toAction, type LogEntry, type LoggedAction } from '../src/game/log.ts';
 import { CLOCK_TOLERANCE_MS, MIN_FIND_GAP_MS, MIN_MS_PER_COUNTRY, type Board } from '../src/game/ranking.ts';
 import { initialState, reduce } from '../src/game/reducer.ts';
 import { seededRandom, shuffle } from '../src/game/rng.ts';
-import { poolFor } from '../src/game/scope.ts';
+import { poolOf } from '../src/game/scope.ts';
 import type { EndReason, GameConfig, GameState } from '../src/game/types.ts';
 
 export const MAX_LOG_ENTRIES = 5000;
@@ -64,7 +63,7 @@ export interface Replayed {
  * only logs actions that did something), when entries follow the end, or when the game never ended.
  */
 export function replay(config: GameConfig, seed: number, log: LogEntry[]): Replayed | null {
-  const pool = poolFor(config.scope, COUNTRIES);
+  const pool = poolOf(config);
   let state = reduce(initialState(config), { type: 'start', config, pool, order: shuffle(pool, seededRandom(seed)), now: 0 });
   const findTimes: number[] = [];
   let paused = false;
