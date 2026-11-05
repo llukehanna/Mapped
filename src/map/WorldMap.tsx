@@ -6,7 +6,7 @@ import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import { GEO_META } from '../data/geoMeta.ts';
 import type { ShapeState } from '../ui/shapeStates.ts';
-import { baseProjection, fitTransform, frameBounds, LAND_BAND, pieceBounds, WORLD_OVERSCAN, type Band, type Bounds, type MapShape, type Rect } from './geometry.ts';
+import { baseProjection, drawnBounds, fitTransform, frameBounds, LAND_BAND, pieceBounds, WORLD_OVERSCAN, type Band, type Bounds, type MapShape, type Rect } from './geometry.ts';
 
 export type HighlightKind = 'hint' | 'target' | 'wrong' | 'reveal' | 'hover';
 
@@ -170,7 +170,7 @@ export function WorldMap(props: WorldMapProps) {
 
   function boundsOf(id: string): Bounds | null {
     const s = byId.get(id);
-    if (s) return path.bounds(s.near) as Bounds;
+    if (s) return drawnBounds(projection, s.near);
     const p = projection(anchors[id]?.anchor ?? [0, 0]);
     return p ? [[p[0] - 2, p[1] - 2], [p[0] + 2, p[1] + 2]] : null;
   }

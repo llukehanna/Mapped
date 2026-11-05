@@ -66,7 +66,6 @@ export function frameBounds(
   anchors: Readonly<Record<string, { anchor: [number, number] }>>,
   band: Band = LAND_BAND,
 ): Bounds {
-  const path = geoPath(projection);
   if (ids === 'world') return worldBounds(projection, band);
   let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
   const extend = ([[a, b], [c, d]]: Bounds) => {
@@ -78,7 +77,7 @@ export function frameBounds(
     drawn.add(s.id);
     const box = FRAME_BOX[s.id];
     const corners = box && [box[0], [box[1][0], box[0][1]], [box[0][0], box[1][1]], box[1], [(box[0][0] + box[1][0]) / 2, box[1][1]]];
-    extend(path.bounds(corners ? { type: 'MultiPoint', coordinates: corners } : s.near) as Bounds);
+    extend(corners ? (geoPath(projection).bounds({ type: 'MultiPoint', coordinates: corners }) as Bounds) : drawnBounds(projection, s.near));
   }
   for (const id of ids) {
     const p = drawn.has(id) ? null : projection(anchors[id]?.anchor ?? [0, 0]);
@@ -113,6 +112,29 @@ export function pieceBounds(projection: GeoProjection, geometry: Polygon | Multi
     }),
   );
   return out;
+}
+
+/**
+ * Pixel bounds, under `projection`, of what to frame for `geometry`: `geoPath.bounds`, unless the map edge cuts a small shape
+ * into a piece at each edge, when only the side holding more of it (the Bering Sea's west, Fiji's east) is framed.
+ * A shape that fills most of the map either way (the Pacific, the Southern Ocean) keeps the full width.
+ */
+export function drawnBounds(projection: GeoProjection, geometry: Polygon | MultiPolygon): Bounds {
+  const whole = geoPath(projection).bounds(geometry) as Bounds;
+  const [[sx0], [sx1]] = geoPath(projection).bounds({ type: 'Sphere' });
+  if (whole[1][0] - whole[0][0] <= (sx1 - sx0) / 2) return whole;
+  const mid = (sx0 + sx1) / 2;
+  const sides = [[], []] as Bounds[][];
+  for (const b of pieceBounds(projection, geometry)) sides[(b[0][0] + b[1][0]) / 2 < mid ? 0 : 1].push(b);
+  if (sides.some((bs) => bs.length === 0)) return whole;
+  const [left, right] = sides.map((bs): Bounds => [
+    [Math.min(...bs.map((b) => b[0][0])), Math.min(...bs.map((b) => b[0][1]))],
+    [Math.max(...bs.map((b) => b[1][0])), Math.max(...bs.map((b) => b[1][1]))],
+  ]);
+  const width = ([[x0], [x1]]: Bounds) => x1 - x0;
+  if (width(left) + width(right) > (sx1 - sx0) / 3) return whole;
+  const area = (bs: Bounds[]) => bs.reduce((sum, [[x0, y0], [x1, y1]]) => sum + (x1 - x0) * (y1 - y0), 0);
+  return area(sides[0]) >= area(sides[1]) ? left : right;
 }
 
 /** The full width of the map, between the band's southern and northern limits. */
