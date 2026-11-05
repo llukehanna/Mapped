@@ -20,7 +20,7 @@ export async function chooseSubregion(page: Page, name: string) {
   await page.getByRole('button', { name: new RegExp(`^${name} \\d+$`) }).click();
 }
 
-export async function chooseTopic(page: Page, topic: 'Countries' | 'Flags' | 'Capitals') {
+export async function chooseTopic(page: Page, topic: 'Countries' | 'Flags' | 'Capitals' | 'Seas') {
   await page.locator('.setup').getByRole('button', { name: topic, exact: true }).click();
 }
 
@@ -33,9 +33,9 @@ export async function start(page: Page) {
   await expect(page.locator('.topbar')).toBeVisible();
 }
 
-/** Clicks a point where `id` is the topmost shape, once the map has stopped moving. */
-export async function clickCountry(page: Page, id: string) {
-  // Let any framing animation (550 ms) finish so the point we find stays on the country.
+/** A point where `id` is the topmost shape, once the map has stopped moving. */
+export async function pointOn(page: Page, id: string): Promise<{ x: number; y: number }> {
+  // Let any framing animation (550 ms) finish so the point we find stays on the shape.
   await page.waitForTimeout(700);
   const point = await page.waitForFunction((id) => {
     const box = document.querySelector(`path.shape[data-id="${id}"]`)?.getBoundingClientRect();
@@ -50,7 +50,12 @@ export async function clickCountry(page: Page, id: string) {
     }
     return null;
   }, id);
-  const { x, y } = (await point.jsonValue())!;
+  return (await point.jsonValue())!;
+}
+
+/** Clicks a point where `id` is the topmost shape, once the map has stopped moving. */
+export async function clickCountry(page: Page, id: string) {
+  const { x, y } = await pointOn(page, id);
   await page.mouse.click(x, y);
 }
 

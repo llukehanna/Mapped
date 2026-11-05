@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { COUNTRIES } from '../data/countries.ts';
 import type { Continent } from '../data/types.ts';
 import { formatClock } from '../game/format.ts';
-import { CONTINENTS, isWorld, poolFor, subregionsOf, WORLD } from '../game/scope.ts';
+import { CONTINENTS, isWorld, poolFor, poolOf, subregionsOf, WORLD } from '../game/scope.ts';
 import type { GameConfig, Mode, Scope } from '../game/types.ts';
 import type { BestSummary } from '../api/types.ts';
 import { boardFor, boardLabel } from '../game/ranking.ts';
@@ -18,9 +18,10 @@ export const MODES: { id: Mode; label: string }[] = [
   { id: 'identify', label: 'Identify' },
 ];
 
-/** Countries is the default, so it leaves `topic` off the config. */
+/** Countries is the default, so it leaves `topic` off the config. Seas is always played over the whole world. */
 function withTopic(config: GameConfig, topic: Topic): GameConfig {
   const { topic: _, ...rest } = config;
+  if (topic === 'seas') return { ...rest, topic, scope: WORLD };
   return topic === 'countries' ? rest : { ...rest, topic };
 }
 
@@ -69,9 +70,10 @@ interface SetupCardProps {
 export function SetupCard({ config, best, serverBest, onChange, onStart, learn: learnOn, onLearn, learned, onResetLearned }: SetupCardProps) {
   const [showSubs, setShowSubs] = useState(config.scope.subregions.length > 0);
   const scope = config.scope;
-  const total = countIn(scope);
-  const board = boardFor(config);
   const topic = topicOf(config);
+  const total = poolOf(config).length;
+  const noun = topic === 'seas' ? 'seas' : 'countries';
+  const board = boardFor(config);
   const learn = learnOn && topic === 'flags';
   const setScope = (update: (scope: Scope) => Scope) => onChange((c) => ({ ...c, scope: update(c.scope) }));
   // Learn is for Flags only: another topic goes back to Play.
@@ -110,7 +112,7 @@ export function SetupCard({ config, best, serverBest, onChange, onStart, learn: 
         </div>
       </div>
 
-      <div>
+      <div hidden={topic === 'seas'}>
         <div className="label">Regions</div>
         <div className="chips" role="group" aria-label="Regions">
           <button type="button" className={`chip ${isWorld(scope) ? 'on' : ''}`} aria-pressed={isWorld(scope)} onClick={() => setScope(() => WORLD)}>
@@ -213,7 +215,7 @@ export function SetupCard({ config, best, serverBest, onChange, onStart, learn: 
 
       <div className="best" hidden={learn}>
         <span>
-          {total} countries · {board ? <RankedTag text={`${boardLabel(board)} board`} /> : <span>Unranked: custom regions</span>}
+          {total} {noun} · {board ? <RankedTag text={`${boardLabel(board)} board`} /> : <span>Unranked: custom regions</span>}
         </span>
         {serverBest ? (
           <span>

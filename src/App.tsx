@@ -1,3 +1,4 @@
+import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, signInHref, type ApiError } from './api/client.ts';
 import { addClaim, migrateClaims, readClaims, removeClaims, saveResume, sessionStore, takeResume, type Run, type SaveState } from './api/resume.ts';
@@ -8,26 +9,30 @@ import { COUNTRIES } from './data/countries.ts';
 import { flagSrc } from './data/flags.ts';
 import { GEO_META } from './data/geoMeta.ts';
 import { COUNTRY, nameOf } from './data/lookup.ts';
+import { SEA_META } from './data/seaMeta.ts';
+import { SEA, SEAS } from './data/seas.ts';
 import { TERRITORIES } from './data/territories.ts';
 import { formatClock, formatCountdown } from './game/format.ts';
 import { FACTS } from './data/facts.ts';
 import { capitalChoices } from './game/capitalChoices.ts';
 import { removedChoices } from './game/choices.ts';
 import { flagChoices } from './game/flagChoices.ts';
-import { clueFor } from './game/hints.ts';
+import { clueFor, seaClue } from './game/hints.ts';
 import { learnStats } from './game/learn.ts';
 import type { LogEntry } from './game/log.ts';
 import { boardFor, boardKey, parseBoard, type Board } from './game/ranking.ts';
-import { groupOf, progressRows } from './game/progress.ts';
+import { groupFor, progressRowsFor } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
-import { isWorld, poolFor, scopeLabel, WORLD } from './game/scope.ts';
-import { hintLevels, isPick, rulesFor, TOPIC_LABEL, topicOf } from './game/topics.ts';
+import { isWorld, poolFor, poolOf, scopeLabel, WORLD } from './game/scope.ts';
+import { hintLevels, isPick, rulesFor, TOPIC_LABEL, topicOf, type Topic } from './game/topics.ts';
 import type { GameConfig } from './game/types.ts';
-import { rotationFor, type Rect } from './map/geometry.ts';
-import { useShapes } from './map/useShapes.ts';
+import { rotationFor, SEA_BAND, type Rect } from './map/geometry.ts';
+import { useSeaShapes, type SeaMapData } from './map/useSeaShapes.ts';
+import { useShapes, type MapData } from './map/useShapes.ts';
 import { WorldMap, type Highlight, type MapHandle } from './map/WorldMap.tsx';
 import { buildIndex } from './match/nameIndex.ts';
+import { SEA_INDEX } from './match/seaIndex.ts';
 import { localBests, readBest, recordResult } from './store/bests.ts';
 import { emailKey, hasImported, markImported } from './store/imported.ts';
 import { readJson, safeStorage, writeJson } from './store/storage.ts';
@@ -74,7 +79,30 @@ const INDEX = buildIndex(COUNTRIES, TERRITORIES);
 const TERRITORY = new Map(TERRITORIES.map((t) => [t.id, t]));
 const OWNERS = new Map(TERRITORIES.flatMap((t) => (t.sovereign && t.geo ? [[t.id, t.sovereign] as const] : [])));
 const clue = (config: GameConfig, level: number, id: string) =>
-  clueFor(config, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
+  topicOf(config) === 'seas'
+    ? seaClue(config.mode, level, id)
+    : clueFor(config, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
+/** Seas games: no disputed areas and no markers (a stable empty list, as the map memoizes on it). */
+const NONE: never[] = [];
+/** The ids framed by the level-1 Locate hint: the target's subregion, or for Seas its basin. */
+const regionOf = (topic: Topic, id: string): string[] => {
+  if (topic === 'seas') return SEAS.filter((s) => s.basin === SEA.get(id)!.basin).map((s) => s.id);
+  const sub = COUNTRY.get(id)!.subregion;
+  return COUNTRIES.filter((c) => c.subregion === sub).map((c) => c.id);
+};
+
+/** What WorldMap draws: the countries, or for Seas the seas with hatched water under them and the land (Antarctica too) over them. */
+function useMapLayers(seas: boolean, land: MapData | null, water: SeaMapData | null) {
+  const cover = useMemo<Feature<Polygon | MultiPolygon>[] | null>(
+    () =>
+      land && water
+        ? [...land.shapes.map((s): Feature<Polygon | MultiPolygon> => ({ type: 'Feature', id: s.id, properties: {}, geometry: s.geometry })), water.antarctica]
+        : null,
+    [land, water],
+  );
+  if (!seas) return land && { shapes: land.shapes, disputed: land.disputed };
+  return water && cover && { shapes: water.seas, disputed: NONE, underlay: water.waters, overlay: cover, anchors: SEA_META, band: SEA_BAND, variant: 'seas' as const };
+}
 const storage = safeStorage();
 /** Wait before the one automatic retry of /finish after a network failure. */
 const FINISH_RETRY_MS = 800;
@@ -120,6 +148,10 @@ export function App() {
   const [learnPicked, setLearnPicked] = useState(false);
   /** Bumped by Reset, so the setup re-reads the learned count. */
   const [, setLearnedSeq] = useState(0);
+  /** The config the map and setup show: the draft in setup, else the game's. */
+  const shown = state.phase === 'setup' ? draft : state.config;
+  const seasOn = topicOf(shown) === 'seas';
+  const seaShapes = useSeaShapes(seasOn);
   const lesson = learn.session?.state ?? null;
   const learning = lesson !== null && lesson.phase !== 'done';
   const learnZoomed = useRef(false);
@@ -165,11 +197,11 @@ export function App() {
     setToast({ text, tone, seq: toastSeq.current });
     setAnnouncement(text);
   };
-  const guess = useGuess({ state, dispatch, index: INDEX, say, flash: flashJust, onHint: () => hint() });
+  const topic = topicOf(state.config);
+  const guess = useGuess({ state, dispatch, index: topic === 'seas' ? SEA_INDEX : INDEX, say, flash: flashJust, onHint: () => hint() });
 
   const playing = state.phase === 'playing';
   const mode = state.config.mode;
-  const topic = topicOf(state.config);
   const rules = rulesFor(state.config);
   const goal = target(state);
   const pick = playing && !rules.ordered && picked && !state.found.includes(picked) ? picked : null;
@@ -224,16 +256,18 @@ export function App() {
     const e = state.event;
     if (!e) return;
     const name = nameOf(e.id);
-    // Capitals: "Nairobi · Kenya"; otherwise the country.
+    /** Countries and Seas are about the place itself: toasts name it with its region's progress. */
+    const byName = topic === 'countries' || topic === 'seas';
+    // Capitals: "Nairobi · Kenya"; otherwise the country (or sea).
     const answerName = topic === 'capitals' ? `${capitalOf(e.id)} · ${name}` : name;
     if (e.kind === 'found') {
       flashJust(e.id);
-      const group = groupOf(e.id, state.pool, COUNTRY);
-      const row = progressRows(state.pool, state.found, COUNTRY).find((r) => r.label === group);
+      const group = groupFor(topic, e.id, state.pool);
+      const row = progressRowsFor(topic, state.pool, state.found).find((r) => r.label === group);
       const count = `${state.found.length} of ${state.pool.length}.`;
       setAnnouncement(rules.answer === 'flag' ? `Correct: ${name}. ${count}` : `${answerName}, found. ${count}`);
       if (e.corrected) say(`Accepted as ${answerName}`, 'good');
-      else if (topic !== 'countries') say(answerName, 'good');
+      else if (!byName) say(answerName, 'good');
       else if (!rules.ordered) say(`${name}${row && row.total > 1 ? ` · ${group} ${row.found}/${row.total}` : ''}`, 'good');
     } else if (e.kind === 'wrong') {
       setMapFlash({ id: e.id, kind: 'wrong', label: name, seq: e.seq });
@@ -241,14 +275,11 @@ export function App() {
       else setAnnouncement(rules.answer === 'flag' ? `No, that's ${name}'s flag.` : `No, that's ${name}.`);
     } else if (e.kind === 'revealed') {
       setMapFlash({ id: e.id, kind: 'reveal', label: name, seq: e.seq });
-      say(topic === 'countries' ? `That was ${name}` : `It was ${answerName}`, 'warn');
+      say(byName ? `That was ${name}` : `It was ${answerName}`, 'warn');
     } else if (e.kind === 'hint') {
       setAnnouncement(`Hint: ${clue(state.config, e.level, e.id)}`);
       // Clicking answers: show the target's region only, then close in for the circle.
-      if (rules.answer === 'click' && e.level === 1) {
-        const sub = COUNTRY.get(e.id)!.subregion;
-        mapRef.current?.frameIds(COUNTRIES.filter((c) => c.subregion === sub).map((c) => c.id), 6);
-      }
+      if (rules.answer === 'click' && e.level === 1) mapRef.current?.frameIds(regionOf(topic, e.id), 6);
       if (rules.answer === 'click' && e.level === 3) mapRef.current?.focus(e.id, 3);
     }
   }, [state.event?.seq]);
@@ -431,7 +462,7 @@ export function App() {
     // The server picks the target order and times the game. If it can't be reached quickly, play offline.
     const online = await api.startGame(config).catch(() => null);
     starting.current = false;
-    const pool = poolFor(config.scope, COUNTRIES);
+    const pool = poolOf(config);
     currentRun.current = online?.id ?? null;
     setRun(online && { id: online.id, claim: online.claim, board: online.board, seed: online.seed });
     setSave(online ? null : { status: 'offline' });
@@ -464,7 +495,7 @@ export function App() {
     if (id) return void dispatch({ type: 'hint', id, now: Date.now() });
     if (rules.ordered) return;
     setWantHint(true);
-    say("Click a country you haven't found", 'info');
+    say(`Click a ${topic === 'seas' ? 'sea' : 'country'} you haven't found`, 'info');
   };
   // Give up always goes through one central dialog. The clock keeps running while it's open.
   const askGiveUp = () => {
@@ -579,18 +610,21 @@ export function App() {
   }, []);
 
   // What the map shows.
-  const config = state.phase === 'setup' ? draft : state.config;
-  const pool = useMemo(() => (state.phase === 'setup' ? poolFor(draft.scope, COUNTRIES) : state.pool), [state.phase, draft.scope, state.pool]);
-  const frame = useMemo(() => (isWorld(config.scope) ? ('world' as const) : new Set(pool)), [config.scope, pool]);
-  const rotate = rotationFor(new Set(pool.map((id) => COUNTRY.get(id)!.continent)));
-  const mapData = shapes && !(shapes instanceof Error) ? shapes : null;
-  const shapeList = mapData?.shapes ?? null;
+  const pool = useMemo(() => (state.phase === 'setup' ? poolOf(draft) : state.pool), [state.phase, draft.topic, draft.scope, state.pool]);
+  const frame = useMemo(() => (seasOn || isWorld(shown.scope) ? ('world' as const) : new Set(pool)), [seasOn, shown.scope, pool]);
+  const rotate = seasOn ? -10 : rotationFor(new Set(pool.map((id) => COUNTRY.get(id)!.continent)));
+  const landData = shapes && !(shapes instanceof Error) ? shapes : null;
+  const seaData = seaShapes && !(seaShapes instanceof Error) ? seaShapes : null;
+  const layers = useMapLayers(seasOn, landData, seaData);
+  const mapError = shapes instanceof Error ? shapes : seasOn && seaShapes instanceof Error ? seaShapes : null;
+  const shapeList = layers?.shapes ?? null;
   // Every shape, plus countries drawn only as a marker (Tuvalu has no shape at this scale), so markers get a state too.
   const allIds = useMemo(() => {
     const ids = shapeList?.map((s) => s.id) ?? [];
+    if (seasOn) return ids;
     const drawn = new Set(ids);
     return [...ids, ...COUNTRIES.filter((c) => !drawn.has(c.id)).map((c) => c.id)];
-  }, [shapeList]);
+  }, [shapeList, seasOn]);
   // Learn: flags learned on this browser fill in like found countries; one that was just learned glows as it fills.
   const learnedCount = lesson?.learned.length ?? 0;
   const learnFound = useMemo(() => {
@@ -607,7 +641,7 @@ export function App() {
         : shapeStates(allIds, state.phase, pool, state.found, state.missed, justFound, OWNERS),
     [allIds, state.phase, pool, state.found, state.missed, justFound, learnFound, justLearned],
   );
-  const markers = useMemo(() => pool.filter((id) => GEO_META[id]?.tiny), [pool]);
+  const markers = useMemo(() => (seasOn ? NONE : pool.filter((id) => GEO_META[id]?.tiny)), [pool, seasOn]);
   const highlights: Highlight[] = [];
   if (pick) highlights.push({ id: pick, kind: 'hint' });
   if (goal && lit && state.phase === 'playing') highlights.push({ id: goal, kind: 'target' });
@@ -684,29 +718,29 @@ export function App() {
 
   const clock = limitMs === null ? formatClock(spent) : formatCountdown(limitMs - spent);
   const clockLevel = left <= 10_000 ? 'crit' : left <= 60_000 ? 'warn' : '';
-  const rows = progressRows(state.pool, state.found, COUNTRY);
+  const rows = progressRowsFor(topic, state.pool, state.found);
   const modeLabel = MODES.find((m) => m.id === mode)!.label;
   const pill = [scopeLabel(state.config.scope), ...(topic === 'countries' ? [] : [TOPIC_LABEL[topic]]), modeLabel].join(' · ');
   const skip = () => dispatch({ type: 'skip', now: Date.now() });
   // The dock's prompt for the current target, and how it's answered.
   const locateGoal = rules.answer === 'click' ? goal : null;
+  const place = topic === 'seas' ? 'sea' : 'country';
   const placeholder =
     rules.answer === 'capital'
       ? 'Type its capital…'
       : rules.prompt === 'flag'
         ? 'Type the country…'
         : rules.prompt === 'map'
-          ? 'Name the highlighted country…'
-          : 'Type a country…';
+          ? `Name the highlighted ${place}…`
+          : `Type a ${place}…`;
 
   return (
     <div className={`app phase-${learn.session ? 'learn' : state.phase}`} style={{ '--kb': `${keyboard}px` } as CSSProperties}>
       <div className="map-wrap" ref={wrapRef}>
-        {mapData && size.width > 0 && (
+        {layers && size.width > 0 && (
           <WorldMap
             ref={mapRef}
-            shapes={mapData.shapes}
-            disputed={mapData.disputed}
+            {...layers}
             width={size.width}
             height={size.height}
             rotate={rotate}
@@ -728,8 +762,8 @@ export function App() {
           />
         )}
       </div>
-      {shapes === null && <div className="loading mute">Loading the map…</div>}
-      {shapes instanceof Error && <div className="loading">{shapes.message}. Reload to try again.</div>}
+      {!layers && !mapError && <div className="loading mute">Loading the map…</div>}
+      {mapError && <div className="loading">{mapError.message}. Reload to try again.</div>}
 
       {state.phase === 'setup' && !learn.session && (
         <>
@@ -886,7 +920,7 @@ export function App() {
                   ref={inputRef}
                   value={guess.value}
                   placeholder={placeholder}
-                  label={rules.answer === 'capital' ? 'Capital' : 'Country name'}
+                  label={rules.answer === 'capital' ? 'Capital' : topic === 'seas' ? 'Sea name' : 'Country name'}
                   shakeSeq={guess.shakeSeq}
                   targetId={rules.ordered ? goal : null}
                   onChange={guess.onChange}
@@ -971,7 +1005,8 @@ export function App() {
           <ZoomControls onIn={() => mapRef.current?.zoomBy(1.6)} onOut={() => mapRef.current?.zoomBy(1 / 1.6)} onFit={() => mapRef.current?.fit()} />
           {tip && !areaTip && (
             <div className="tip glass" style={{ left: tip.x + 14, top: tip.y - 40 }}>
-              <b>{nameOf(tip.id)}</b> <span className="mute">· {COUNTRY.get(tip.id)!.subregion}</span>
+              {/* A sea's basin; a country's subregion (finer than the review's continent groups). */}
+              <b>{nameOf(tip.id)}</b> <span className="mute">· {topic === 'seas' ? groupFor(topic, tip.id, state.pool) : COUNTRY.get(tip.id)!.subregion}</span>
             </div>
           )}
         </>
