@@ -4,7 +4,7 @@ import { feature } from 'topojson-client';
 import { describe, expect, it } from 'vitest';
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 import { GEO_META } from '../../src/data/geoMeta.ts';
-import { baseProjection, fitTransform, frameBounds, pieceBounds, prepareShapes, rotationFor, SEA_BAND, WORLD_OVERSCAN } from '../../src/map/geometry.ts';
+import { baseProjection, drawnBounds, fitTransform, frameBounds, pieceBounds, prepareShapes, rotationFor, SEA_BAND, WORLD_OVERSCAN } from '../../src/map/geometry.ts';
 
 const topo = JSON.parse(readFileSync(new URL('../../src/data/world.topo.json', import.meta.url), 'utf8'));
 const shapes = prepareShapes((feature(topo, topo.objects.countries) as unknown as FeatureCollection<Polygon | MultiPolygon>).features);
@@ -106,5 +106,33 @@ describe('pieceBounds', () => {
     expect(left[1][0] - left[0][0]).toBeLessThan(50);
     expect(right[1][0]).toBeCloseTo(whole1, 0);
     expect(right[1][0] - right[0][0]).toBeLessThan(120);
+  });
+});
+
+describe('drawnBounds', () => {
+  const projection = baseProjection(1280, 720, -10);
+  const box = (w: number, e: number, s: number, n: number): Polygon => ({ type: 'Polygon', coordinates: [[[w, s], [w, n], [e, n], [e, s], [w, s]]] });
+
+  it('matches geoPath.bounds for a shape the map edge leaves whole', () => {
+    const [[x0, y0], [x1, y1]] = drawnBounds(projection, box(0, 20, 0, 20));
+    const [[a, b], [c, d]] = geoPath(projection).bounds(box(0, 20, 0, 20));
+    for (const [p, q] of [[x0, a], [y0, b], [x1, c], [y1, d]]) expect(p).toBeCloseTo(q, 0);
+  });
+
+  it('frames only the larger side of a shape the map edge cuts through, not the whole map width', () => {
+    // 160°E to 160°W: 30° on the right edge, 10° on the left.
+    const [[x0], [x1]] = drawnBounds(projection, box(160, -160, 0, 20));
+    const [, right] = pieceBounds(projection, box(160, -160, 0, 20)).sort((p, q) => p[0][0] - q[0][0]);
+    expect(x0).toBeCloseTo(right[0][0], 0);
+    expect(x1).toBeCloseTo(right[1][0], 0);
+  });
+
+  it('keeps the full width for a shape with large parts at both edges, like the Pacific', () => {
+    // 120°E to 80°W: 50° on the right edge, 110° on the left.
+    const shape = box(120, -80, -40, 40);
+    const [[x0], [x1]] = drawnBounds(projection, shape);
+    const [[a], [b]] = geoPath(projection).bounds(shape);
+    expect(x0).toBeCloseTo(a, 0);
+    expect(x1).toBeCloseTo(b, 0);
   });
 });
