@@ -14,7 +14,7 @@ Anyone can play. Sign in with Google to save your games and get on the leaderboa
 
 The bullets above describe Countries. The modes work on every topic. In Flags, Type shows a flag and you name its country, Locate asks you to click the flag's country, and Identify lights up a country and offers four flags. In Capitals, Type and Identify name the country (Type: type its capital; Identify: pick its capital from 4). Locate gives you a capital and you click its country.
 
-In Seas, the seas are the board and the land goes quiet: the sea you haven't found is light, found ones turn gold, and land is a dark silhouette you can't click. Gulfs, bays and straits are hatched and aren't in the game; type one in Type mode and you get a note saying what it is, counting as nothing. Seas is World only, with no region picker. Locate hints name the basin first, then the coast.
+In Seas, the seas are the board and the land goes quiet: seas you haven't found are plain, found ones fill in, and land is a muted backdrop you can't click. Gulfs, bays and straits are hatched and aren't in the game; type one in Type mode and you get a note saying what it is, counting as nothing. Seas is World only, with no region picker. Locate hints name the basin first, then the coast.
 
 Hints are there if you're stuck, and they cost you on the leaderboard. Flags · Type has five: the region (skipped when the whole game is one region, like S. America), then the first letter, then the letter pattern with its count, then the first and last letters, then every other letter.
 
