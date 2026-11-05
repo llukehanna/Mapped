@@ -29,6 +29,8 @@ export interface MapHandle {
   frameIds(ids: readonly string[], maxK?: number): void;
   /** Is the country inside the safe area, with its largest landmass at least `minPx` across? */
   isVisible(id: string, minPx: number): boolean;
+  /** How much of the shape, as drawn on screen, lies inside `rect` (screen coordinates): 0 to 1. */
+  shareUnder(id: string, rect: { left: number; top: number; right: number; bottom: number }): number;
 }
 
 interface WorldMapProps {
@@ -195,6 +197,25 @@ export function WorldMap(props: WorldMapProps) {
       // On screen by its whole footprint, but big enough only if its largest landmass is.
       const size = (mainSize.get(id) ?? 0) * t.k;
       return x1 > safe.x && x0 < safe.x + safe.width && y1 > safe.y && y0 < safe.y + safe.height && size >= minPx;
+    },
+    shareUnder(id, rect) {
+      // Sample the shape's on-screen box: of the points inside the shape (and the viewport), the share inside `rect`.
+      const el = svgRef.current?.querySelector<SVGPathElement>(`path.shape[data-id="${id}"]`);
+      const toLocal = el?.getScreenCTM()?.inverse();
+      if (!el || !toLocal || typeof el.isPointInFill !== 'function') return 0;
+      const box = el.getBoundingClientRect();
+      const [x0, x1, y0, y1] = [Math.max(box.left, 0), Math.min(box.right, width), Math.max(box.top, 0), Math.min(box.bottom, height)];
+      if (x1 <= x0 || y1 <= y0) return 0;
+      let inside = 0;
+      let under = 0;
+      for (let i = 0.5; i < 32; i++)
+        for (let j = 0.5; j < 32; j++) {
+          const [x, y] = [x0 + ((x1 - x0) * i) / 32, y0 + ((y1 - y0) * j) / 32];
+          if (!el.isPointInFill(new DOMPoint(x, y).matrixTransform(toLocal))) continue;
+          inside += 1;
+          if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) under += 1;
+        }
+      return inside ? under / inside : 0;
     },
   }));
 

@@ -10,7 +10,7 @@ import { flagSrc } from './data/flags.ts';
 import { GEO_META } from './data/geoMeta.ts';
 import { COUNTRY, nameOf } from './data/lookup.ts';
 import { SEA_META } from './data/seaMeta.ts';
-import { SEA, SEAS } from './data/seas.ts';
+import { OCEANS, SEA, SEAS } from './data/seas.ts';
 import { TERRITORIES } from './data/territories.ts';
 import { formatClock, formatCountdown } from './game/format.ts';
 import { FACTS } from './data/facts.ts';
@@ -25,7 +25,7 @@ import { groupFor, progressRowsFor } from './game/progress.ts';
 import { elapsed, initialState, reduce, target } from './game/reducer.ts';
 import { seededRandom, shuffle } from './game/rng.ts';
 import { isWorld, poolFor, poolOf, scopeLabel, WORLD } from './game/scope.ts';
-import { hintLevels, isPick, rulesFor, TOPIC_LABEL, topicOf, type Topic } from './game/topics.ts';
+import { ANSWER_NOUN, hintLevels, isPick, rulesFor, TOPIC_LABEL, topicOf, type Topic } from './game/topics.ts';
 import type { GameConfig } from './game/types.ts';
 import { rotationFor, SEA_BAND, type Rect } from './map/geometry.ts';
 import { useSeaShapes, type SeaMapData } from './map/useSeaShapes.ts';
@@ -82,11 +82,13 @@ const clue = (config: GameConfig, level: number, id: string) =>
   topicOf(config) === 'seas'
     ? seaClue(config.mode, level, id)
     : clueFor(config, level, { country: COUNTRY.get(id)!, facts: FACTS.get(id)!, meta: GEO_META[id], nameOf });
+/** A lit target this much under the By-region panel is brought into view. */
+const PANEL_HIDES = 1 / 3;
 /** Seas games: no disputed areas and no markers (a stable empty list, as the map memoizes on it). */
 const NONE: never[] = [];
-/** The ids framed by the level-1 Locate hint: the target's subregion, or for Seas its basin. */
-const regionOf = (topic: Topic, id: string): string[] => {
-  if (topic === 'seas') return SEAS.filter((s) => s.basin === SEA.get(id)!.basin).map((s) => s.id);
+/** The ids framed by the level-1 Locate hint: the target's subregion, or for Seas its basin. None for an ocean (its basin would be itself). */
+const regionOf = (topic: Topic, id: string): string[] | null => {
+  if (topic === 'seas') return OCEANS.has(id) ? null : SEAS.filter((s) => s.basin === SEA.get(id)!.basin).map((s) => s.id);
   const sub = COUNTRY.get(id)!.subregion;
   return COUNTRIES.filter((c) => c.subregion === sub).map((c) => c.id);
 };
@@ -279,16 +281,19 @@ export function App() {
     } else if (e.kind === 'hint') {
       setAnnouncement(`Hint: ${clue(state.config, e.level, e.id)}`);
       // Clicking answers: show the target's region only, then close in for the circle.
-      if (rules.answer === 'click' && e.level === 1) mapRef.current?.frameIds(regionOf(topic, e.id), 6);
+      const region = rules.answer === 'click' && e.level === 1 ? regionOf(topic, e.id) : null;
+      if (region) mapRef.current?.frameIds(region, 6);
       if (rules.answer === 'click' && e.level === 3) mapRef.current?.focus(e.id, 3);
     }
   }, [state.event?.seq]);
 
-  // Lit-up targets: bring a tiny or off-screen one into view.
+  // Lit-up targets: bring a tiny or off-screen one into view, or one largely under the By-region panel (desktop).
   useEffect(() => {
     if (!lit || state.phase !== 'playing' || !goal) return;
     const id = window.setTimeout(() => {
-      if (!mapRef.current?.isVisible(goal, 10)) mapRef.current?.focus(goal, 6);
+      const map = mapRef.current;
+      const panel = small ? null : document.querySelector('.progress')?.getBoundingClientRect();
+      if (map && (!map.isVisible(goal, 10) || (panel && map.shareUnder(goal, panel) >= PANEL_HIDES))) map.focus(goal, 6);
     }, 120);
     return () => window.clearTimeout(id);
   }, [goal, lit, state.phase]);
@@ -488,14 +493,18 @@ export function App() {
     learnZoomed.current = false;
     learn.start(scope);
   }
-  const startFromSetup = () => (learnPicked && topicOf(draft) === 'flags' ? startLearning() : void start());
+  const startFromSetup = () => {
+    if (seaWait) return;
+    if (learnPicked && topicOf(draft) === 'flags') startLearning();
+    else void start();
+  };
   /** One target at a time: a hint about it. Any order: about the country picked on the map, or ask for a pick. */
   const hint = () => {
     const id = rules.ordered ? goal : pick;
     if (id) return void dispatch({ type: 'hint', id, now: Date.now() });
     if (rules.ordered) return;
     setWantHint(true);
-    say(`Click a ${topic === 'seas' ? 'sea' : 'country'} you haven't found`, 'info');
+    say(`Click a ${ANSWER_NOUN[topic].one} you haven't found`, 'info');
   };
   // Give up always goes through one central dialog. The clock keeps running while it's open.
   const askGiveUp = () => {
@@ -617,6 +626,8 @@ export function App() {
   const seaData = seaShapes && !(seaShapes instanceof Error) ? seaShapes : null;
   const layers = useMapLayers(seasOn, landData, seaData);
   const mapError = shapes instanceof Error ? shapes : seasOn && seaShapes instanceof Error ? seaShapes : null;
+  /** Seas setup: Start waits for the sea map. A review's Play again already has it. */
+  const seaWait = seasOn && !layers ? (mapError ? `${mapError.message}. Reload to try again.` : 'Loading the seas…') : null;
   const shapeList = layers?.shapes ?? null;
   // Every shape, plus countries drawn only as a marker (Tuvalu has no shape at this scale), so markers get a state too.
   const allIds = useMemo(() => {
@@ -724,7 +735,7 @@ export function App() {
   const skip = () => dispatch({ type: 'skip', now: Date.now() });
   // The dock's prompt for the current target, and how it's answered.
   const locateGoal = rules.answer === 'click' ? goal : null;
-  const place = topic === 'seas' ? 'sea' : 'country';
+  const place = ANSWER_NOUN[topic].one;
   const placeholder =
     rules.answer === 'capital'
       ? 'Type its capital…'
@@ -803,6 +814,7 @@ export function App() {
             serverBest={user && draftBoard ? (bests.get(draftBoard) ?? null) : null}
             onChange={setDraft}
             onStart={startFromSetup}
+            waiting={seaWait}
             learn={learnPicked}
             onLearn={setLearnPicked}
             learned={pool.filter((id) => learnedIds.has(id)).length}
@@ -920,7 +932,7 @@ export function App() {
                   ref={inputRef}
                   value={guess.value}
                   placeholder={placeholder}
-                  label={rules.answer === 'capital' ? 'Capital' : topic === 'seas' ? 'Sea name' : 'Country name'}
+                  label={rules.answer === 'capital' ? 'Capital' : ANSWER_NOUN[topic].field}
                   shakeSeq={guess.shakeSeq}
                   targetId={rules.ordered ? goal : null}
                   onChange={guess.onChange}
@@ -934,7 +946,7 @@ export function App() {
               </button>
             )}
           </div>
-          {!small && <RegionProgress rows={rows} />}
+          {!small && <RegionProgress rows={rows} initialOpen={topic !== 'seas'} />}
           <ZoomControls onIn={() => mapRef.current?.zoomBy(1.6)} onOut={() => mapRef.current?.zoomBy(1 / 1.6)} onFit={() => mapRef.current?.fit()} />
           {confirming && <GiveUpDialog onCancel={cancelGiveUp} onGiveUp={giveUp} />}
           {menuOpen && small && (

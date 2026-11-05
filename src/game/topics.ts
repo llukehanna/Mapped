@@ -67,6 +67,14 @@ export function hintLevels(config: Pick<GameConfig, 'mode' | 'topic'> & { scope?
   return answer === 'click' ? 3 : isPick(answer) ? 2 : 4;
 }
 
+/** What one answer is called in setup and dock copy: Seas are seas, every other topic answers with countries. */
+export const ANSWER_NOUN: Record<Topic, { one: string; many: string; field: string }> = {
+  countries: { one: 'country', many: 'countries', field: 'Country name' },
+  flags: { one: 'country', many: 'countries', field: 'Country name' },
+  capitals: { one: 'country', many: 'countries', field: 'Country name' },
+  seas: { one: 'sea', many: 'seas', field: 'Sea name' },
+};
+
 export const MODE_BLURB: Record<Topic, Record<Mode, string>> = {
   countries: { type: 'Name them all, any order', locate: 'Click the named country', identify: 'Name the lit-up country' },
   flags: { type: "Type the flag's country", locate: "Click the flag's country", identify: "Pick the lit-up country's flag" },

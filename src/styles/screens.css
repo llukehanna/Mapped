@@ -37,6 +37,8 @@
 .best b { color: var(--ink); font-weight: 500; }
 .start { display: flex; align-items: center; justify-content: center; gap: 10px; height: 46px; border-radius: 11px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 15px; transition: transform 160ms var(--ease); }
 .start:hover { transform: translateY(-1px); }
+.start:disabled { opacity: 0.5; cursor: default; transform: none; }
+.setup-wait { margin: 0 0 -8px; font-size: 13px; }
 .start kbd { color: inherit; border-color: color-mix(in srgb, var(--accent-ink) 30%, transparent); }
 
 /* Review: same map, missed list on the right. */

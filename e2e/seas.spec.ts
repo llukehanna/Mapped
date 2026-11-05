@@ -46,10 +46,13 @@ test('seas type: names count, short forms too; gulfs get a note and countries no
   await input.fill('Gulf of Mexico');
   await expect(page.getByRole('status').filter({ hasText: 'Gulf of Mexico: a gulf, not on the list' })).toBeVisible();
   await expect(score).toHaveText('2 / 55');
+  // Once that note is gone, a country name says nothing at all.
+  await expect(page.getByRole('status')).toHaveCount(0);
   await input.fill('France');
   await input.press('Enter');
   await page.waitForTimeout(800);
   await expect(score).toHaveText('2 / 55');
+  await expect(page.getByRole('status')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -112,10 +115,67 @@ test('seas review: missed seas by basin, named with their basin on hover', async
   await expect(review.getByText('Missed · 55')).toBeVisible();
   await expect(review.locator('.review-group-label').filter({ hasText: /^Mediterranean · 7$/ })).toBeVisible();
   await expect(review.locator('.review-item').filter({ hasText: /^Aegean Sea$/ })).toBeVisible();
-  const { x, y } = await pointOn(page, 'med');
+  const { x, y } = await pointOn(page, 'aegean');
   await page.mouse.move(x, y);
-  const tip = page.locator('.tip');
-  await expect(tip).toContainText('Mediterranean Sea');
-  await expect(tip).toContainText('· Mediterranean');
+  await expect(page.locator('.tip')).toHaveText('Aegean Sea · Mediterranean');
+  expect(errors).toEqual([]);
+});
+
+test('seas setup: Start waits for the sea map, and says so if it fails', async ({ page }) => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/seas.topo-*.json', async (route) => {
+    await held;
+    await route.continue();
+  });
+  await openSetup(page);
+  await chooseTopic(page, 'Seas');
+  const go = page.locator('.setup .start');
+  await expect(go).toBeDisabled();
+  await expect(page.locator('.setup')).toContainText('Loading the seas…');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(400);
+  await expect(page.locator('.topbar')).toHaveCount(0);
+  release();
+  await expect(go).toBeEnabled();
+  await expect(page.locator('.setup')).not.toContainText('Loading the seas…');
+  await start(page);
+  await expect(page.locator('.topbar .score')).toHaveText('0 / 55');
+});
+
+test('seas setup: a failed sea map keeps Start off and shows why', async ({ page }) => {
+  await page.route('**/seas.topo-*.json', (route) => route.fulfill({ status: 500, body: '' }));
+  await openSetup(page);
+  await chooseTopic(page, 'Seas');
+  await expect(page.locator('.setup')).toContainText('Sea data failed to load (500). Reload to try again.');
+  await expect(page.locator('.setup .start')).toBeDisabled();
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(400);
+  await expect(page.locator('.topbar')).toHaveCount(0);
+  // Countries still plays.
+  await chooseTopic(page, 'Countries');
+  await expect(page.locator('.setup .start')).toBeEnabled();
+});
+
+test('seas identify: By region starts closed; a lit target under the open panel is brought into view', async ({ page }) => {
+  const errors = watchErrors(page);
+  // Seed 180 orders the seas Barents Sea, then Amundsen Sea (under the panel's corner at world zoom).
+  await page.route('**/api/games', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), seed: 180 } });
+  });
+  await startSeas(page, 'Identify');
+  await expect(page.locator('.guess')).toHaveAttribute('data-target-id', 'barents');
+  const head = page.locator('.progress-head');
+  await expect(head).toHaveAttribute('aria-expanded', 'false');
+  await head.click();
+  await expect(head).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await expect(page.locator('.guess')).toHaveAttribute('data-target-id', 'amundsen');
+  await page.waitForTimeout(1200);
+  const sea = (await page.locator('path.shape[data-id="amundsen"]').boundingBox())!;
+  const panel = (await page.locator('.progress').boundingBox())!;
+  const overlaps = sea.x < panel.x + panel.width && panel.x < sea.x + sea.width && sea.y < panel.y + panel.height && panel.y < sea.y + sea.height;
+  expect(overlaps).toBe(false);
   expect(errors).toEqual([]);
 });
