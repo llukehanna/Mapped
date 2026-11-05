@@ -2,10 +2,11 @@ import type { Facts } from '../data/facts.ts';
 import type { GeoMeta } from '../data/geoMeta.ts';
 import type { CountryDef } from '../data/types.ts';
 import { capitalOf } from '../data/capitals.ts';
-import { nameOf } from '../data/lookup.ts';
-import { BASINS, OCEANS, SEA } from '../data/seas.ts';
+import { COUNTRIES } from '../data/countries.ts';
+import { COUNTRY, nameOf } from '../data/lookup.ts';
+import { BASINS, OCEANS, SEA, SEAS } from '../data/seas.ts';
 import { SEA_META } from '../data/seaMeta.ts';
-import { hasRegionRung, rulesFor } from './topics.ts';
+import { hasRegionRung, rulesFor, type Topic } from './topics.ts';
 import type { GameConfig, Mode, Scope } from './types.ts';
 
 export interface ClueInput {
@@ -98,4 +99,17 @@ export function seaClue(mode: Mode, level: number, id: string): string {
   const coast = SEA_META[id].coast;
   if (coast.length === 0) return 'Off Antarctica';
   return `Off ${listOrMore(coast.map(nameOf).sort((a, b) => a.localeCompare(b)))}`;
+}
+
+/**
+ * The ids framed by the level-1 Locate hint: the target's subregion, or for Seas its basin. None when that would frame the answer
+ * alone: an ocean (its basin is its own), or a group of one (the Caspian, the only inland sea).
+ */
+export function hintRegion(topic: Topic, id: string): string[] | null {
+  if (topic === 'seas' && OCEANS.has(id)) return null;
+  const ids =
+    topic === 'seas'
+      ? SEAS.filter((s) => s.basin === SEA.get(id)!.basin).map((s) => s.id)
+      : COUNTRIES.filter((c) => c.subregion === COUNTRY.get(id)!.subregion).map((c) => c.id);
+  return ids.length > 1 ? ids : null;
 }

@@ -6,7 +6,7 @@ import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import { GEO_META } from '../data/geoMeta.ts';
 import type { ShapeState } from '../ui/shapeStates.ts';
-import { baseProjection, fitTransform, frameBounds, LAND_BAND, WORLD_OVERSCAN, type Band, type Bounds, type MapShape, type Rect } from './geometry.ts';
+import { baseProjection, fitTransform, frameBounds, LAND_BAND, pieceBounds, WORLD_OVERSCAN, type Band, type Bounds, type MapShape, type Rect } from './geometry.ts';
 
 export type HighlightKind = 'hint' | 'target' | 'wrong' | 'reveal' | 'hover';
 
@@ -191,12 +191,16 @@ export function WorldMap(props: WorldMapProps) {
       apply(fitTransform(frameBounds(projection, shapes, new Set(ids), anchors, band), safe, maxK), 650);
     },
     isVisible(id, minPx) {
-      const b = boundsOf(id);
-      if (!b) return false;
-      const [[x0, y0], [x1, y1]] = [t.apply(b[0]), t.apply(b[1])];
-      // On screen by its whole footprint, but big enough only if its largest landmass is.
+      // On screen by any drawn piece of its footprint (a shape cut by the map edge is two pieces, not one map-wide box),
+      // but big enough only if its largest landmass is.
+      const s = byId.get(id);
+      const pieces = s ? pieceBounds(projection, s.near) : [boundsOf(id)].filter((b) => b !== null);
       const size = (mainSize.get(id) ?? 0) * t.k;
-      return x1 > safe.x && x0 < safe.x + safe.width && y1 > safe.y && y0 < safe.y + safe.height && size >= minPx;
+      const inSafe = (b: Bounds) => {
+        const [[x0, y0], [x1, y1]] = [t.apply(b[0]), t.apply(b[1])];
+        return x1 > safe.x && x0 < safe.x + safe.width && y1 > safe.y && y0 < safe.y + safe.height;
+      };
+      return size >= minPx && pieces.some(inSafe);
     },
     shareUnder(id, rect) {
       // Sample the shape's on-screen box: of the points inside the shape (and the viewport), the share inside `rect`.

@@ -148,6 +148,8 @@ test('seas setup: a failed sea map keeps Start off and shows why', async ({ page
   await openSetup(page);
   await chooseTopic(page, 'Seas');
   await expect(page.locator('.setup')).toContainText('Sea data failed to load (500). Reload to try again.');
+  // Said once, on the card: not again in the middle of the map.
+  await expect(page.getByText('Sea data failed to load (500). Reload to try again.')).toHaveCount(1);
   await expect(page.locator('.setup .start')).toBeDisabled();
   await page.keyboard.press('Enter');
   await page.waitForTimeout(400);
@@ -177,5 +179,43 @@ test('seas identify: By region starts closed; a lit target under the open panel 
   const panel = (await page.locator('.progress').boundingBox())!;
   const overlaps = sea.x < panel.x + panel.width && panel.x < sea.x + sea.width && sea.y < panel.y + panel.height && panel.y < sea.y + sea.height;
   expect(overlaps).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+/** How many points of a grid over the viewport (between the top bar and the dock) fall inside the sea as drawn. */
+const onScreen = (page: Page, id: string) =>
+  page.evaluate((id) => {
+    const el = document.querySelector<SVGPathElement>(`path.shape[data-id="${id}"]`)!;
+    const toLocal = el.getScreenCTM()!.inverse();
+    let hits = 0;
+    for (let i = 0.5; i < 64; i++)
+      for (let j = 0.5; j < 40; j++) {
+        const [x, y] = [(innerWidth * i) / 64, 80 + ((innerHeight - 200) * j) / 40];
+        if (el.isPointInFill(new DOMPoint(x, y).matrixTransform(toLocal))) hits += 1;
+      }
+    return hits;
+  }, id);
+
+test('seas identify: a lit sea split by the map edge is brought into view when zoomed in elsewhere', async ({ page }) => {
+  const errors = watchErrors(page);
+  // Seed 322 orders the seas Mediterranean, then the Pacific (drawn in two pieces at the map's left and right edges).
+  await page.route('**/api/games', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), seed: 322 } });
+  });
+  await startSeas(page, 'Identify');
+  await expect(page.locator('.guess')).toHaveAttribute('data-target-id', 'med');
+  await page.waitForTimeout(800);
+  // Zoom in on the middle of the map (Africa): the Pacific's latitudes, but none of its water.
+  for (let i = 0; i < 4; i++) {
+    await page.getByRole('button', { name: 'Zoom in' }).click();
+    await page.waitForTimeout(300);
+  }
+  await page.waitForTimeout(500);
+  expect(await onScreen(page, 'pac')).toBe(0);
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await expect(page.locator('.guess')).toHaveAttribute('data-target-id', 'pac');
+  await page.waitForTimeout(1200);
+  expect(await onScreen(page, 'pac')).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
